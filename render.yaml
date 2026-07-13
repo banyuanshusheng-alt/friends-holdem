@@ -1,0 +1,16 @@
+# Render の Blueprint（設計図）。
+# これがあると、Render 側の設定フォームに手入力する必要がなくなり、
+# リポジトリを選ぶだけで自動的にこの内容で公開されます。
+services:
+  - type: web
+    name: friends-holdem
+    runtime: node
+    plan: free
+    region: singapore        # 日本から一番近いリージョン
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true          # git push すると自動で再公開
+    envVars:
+      - key: ACCESS_CODE
+        sync: false           # 公開時に「合い言葉」を入力する画面が出ます
