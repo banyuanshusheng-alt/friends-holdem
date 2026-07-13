@@ -195,6 +195,32 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 .community { display: flex; gap: 6px; min-height: 62px; align-items: center; }
 .board-msg { font-size: .8rem; color: rgba(255,255,255,.75); min-height: 1em; text-align: center; padding: 0 10px; }
 
+/* --- ロビー（参加者待ち）中央カード --- */
+.lobby-center {
+  display: flex; flex-direction: column; align-items: center; gap: 11px;
+  pointer-events: auto; text-align: center; padding: 0 12px;
+}
+.lc-badge {
+  font-size: .7rem; font-weight: 700; letter-spacing: .1em; color: var(--gold);
+  background: rgba(0,0,0,.35); border: 1px solid rgba(232,199,102,.45); border-radius: 999px;
+  padding: 4px 14px; animation: lcPulse 1.8s ease-in-out infinite;
+}
+@keyframes lcPulse { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+.lc-code {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;
+  background: rgba(0,0,0,.42); border: 1px solid var(--gold); border-radius: 16px;
+  padding: 12px 30px; color: var(--text); box-shadow: 0 0 26px rgba(232,199,102,.22);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.lc-code:hover { transform: translateY(-1px); box-shadow: 0 0 34px rgba(232,199,102,.4); }
+.lc-code:active { transform: translateY(0); }
+.lc-code-label { font-size: .58rem; color: var(--faint); letter-spacing: .18em; }
+.lc-code-val { font-size: 2.1rem; font-weight: 800; letter-spacing: .22em; color: var(--gold); line-height: 1.1; }
+.lc-code-copy { font-size: .64rem; color: var(--muted); margin-top: 2px; }
+.lc-count { font-size: .92rem; color: var(--text); font-weight: 600; }
+.lc-need { color: var(--gold); font-weight: 700; }
+.lc-hint { font-size: .78rem; color: var(--muted); }
+
 /* --- カード --- */
 .card {
   width: 42px; height: 60px; border-radius: 7px;

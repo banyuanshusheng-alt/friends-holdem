@@ -78,9 +78,50 @@
       youwin: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => blip(f, i * 0.08, 0.26, { type: 'triangle', vol: 0.19 })); chip(0.22, 5); },
     };
     function play(name) { if (!enabled) return; ensure(); if (!ctx) return; (sounds[name] || (() => {}))(); }
-    function setEnabled(v) { enabled = v; localStorage.setItem('holdem_sound', v ? 'on' : 'off'); if (v) ensure(); }
+
+    // ===== BGM（カジノラウンジ風アンビエント。合成＝音声ファイル不要）=====
+    let bgmTimer = null, bgmIndex = 0, bgmWanted = false;
+    // 各コード（低音のパッド）。マイナー系でしっとり。
+    const CHORDS = [
+      [110.00, 220.00, 261.63, 329.63], // Am
+      [ 87.31, 174.61, 220.00, 261.63], // F
+      [ 98.00, 196.00, 246.94, 293.66], // G
+      [ 65.41, 130.81, 164.81, 196.00], // C(低)
+    ];
+    function playChord(freqs, dur) {
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.05, t0 + 1.0);         // ゆっくり立ち上げ
+      g.gain.setValueAtTime(0.05, Math.max(t0 + 1.0, t0 + dur - 1.0));
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);        // ゆっくり消える
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+      g.connect(lp).connect(ctx.destination);
+      freqs.forEach((f, i) => {
+        const o = ctx.createOscillator();
+        o.type = i === 0 ? 'sine' : 'triangle';
+        o.frequency.value = f;
+        o.detune.value = (Math.random() - 0.5) * 6; // わずかな揺らぎで温かみ
+        o.connect(g); o.start(t0); o.stop(t0 + dur + 0.2);
+      });
+    }
+    function bgmTick() { playChord(CHORDS[bgmIndex % CHORDS.length], 4.2); bgmIndex++; }
+    function bgmRun() { // 条件が揃えばループ開始
+      if (bgmTimer || !enabled || !bgmWanted) return;
+      ensure(); if (!ctx) return;
+      bgmTick(); bgmTimer = setInterval(bgmTick, 4000);
+    }
+    function bgmHalt() { if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; } }
+    function startBGM() { bgmWanted = true; bgmRun(); }  // 入室時
+    function stopBGM() { bgmWanted = false; bgmHalt(); } // 退出時
+
+    function setEnabled(v) {
+      enabled = v; localStorage.setItem('holdem_sound', v ? 'on' : 'off');
+      if (v) { ensure(); bgmRun(); } else bgmHalt(); // ミュートは bgmWanted を保持
+    }
     function isEnabled() { return enabled; }
-    return { play, setEnabled, isEnabled, ensure };
+    return { play, setEnabled, isEnabled, ensure, startBGM, stopBGM };
   })();
   // 最初のユーザー操作でオーディオを有効化（ブラウザ制約）
   document.addEventListener('click', () => Sound.ensure(), { once: true });
@@ -186,6 +227,7 @@
     localStorage.setItem('holdem_room', code);
     $('#room-code-text').textContent = code;
     showGame();
+    if (Sound.isEnabled()) Sound.startBGM();
   }
 
   // 接続確立時：まず合い言葉ロックの要否を確認 → 認証後に部屋へ自動復帰
@@ -211,6 +253,7 @@
     if (!confirm('部屋から退出しますか？（チップと成績は残ります。同じ名前・端末で再入室すれば復帰できます）')) return;
     localStorage.removeItem('holdem_room');
     currentCode = null; state = null;
+    Sound.stopBGM();
     showHome();
     socket.disconnect(); socket.connect();
   });
@@ -381,23 +424,58 @@
   }
 
   function renderBoard() {
+    const lc = $('#lobby-center');
+    const pot = $('#pot');
     const community = $('#community');
+    const msg = $('#board-msg');
+
+    // ロビー（開始前）は集合カードを中央に表示
+    if (state.state === 'lobby') {
+      lc.hidden = false; pot.hidden = true; community.hidden = true; msg.hidden = true;
+      renderLobbyCenter();
+      return;
+    }
+    lc.hidden = true; pot.hidden = false; community.hidden = false; msg.hidden = false;
+
     community.innerHTML = '';
     const g = state.game;
     if (g && g.community) g.community.forEach((c) => community.appendChild(cardEl(c)));
 
-    const pot = $('#pot');
     if (g && g.totalPot > 0) pot.innerHTML = `POT <b>${fmt(g.totalPot)}</b>`;
     else pot.innerHTML = '';
 
-    const msg = $('#board-msg');
-    if (!g) {
-      msg.textContent = state.players.length < 2 ? '友達の入室を待っています…' : 'ホストの開始を待っています';
-    } else if (g.result) {
-      msg.textContent = resultMessage(g.result);
-    } else {
-      msg.textContent = streetName(g.street);
+    if (!g) msg.textContent = '';
+    else if (g.result) msg.textContent = resultMessage(g.result);
+    else msg.textContent = streetName(g.street);
+  }
+
+  function renderLobbyCenter() {
+    const lc = $('#lobby-center');
+    const count = state.players.length;
+    const need = Math.max(0, 2 - count);
+    const isHost = state.hostId === state.youId;
+    lc.innerHTML = `
+      <div class="lc-badge">● メンバー集合中</div>
+      <button id="lc-code" class="lc-code" type="button">
+        <span class="lc-code-label">ROOM CODE</span>
+        <span class="lc-code-val">${state.code}</span>
+        <span class="lc-code-copy">⧉ タップで招待メッセージをコピー</span>
+      </button>
+      <div class="lc-count">👥 ${count}人が集合${need > 0 ? `　<span class="lc-need">あと${need}人でスタート可</span>` : ''}</div>
+      <div class="lc-hint">${isHost ? '2人以上そろったら下の「ゲーム開始」を押そう' : 'ホストの開始を待っています…'}</div>
+    `;
+    const btn = lc.querySelector('#lc-code');
+    if (btn) btn.addEventListener('click', shareRoom);
+  }
+
+  async function shareRoom() {
+    const url = location.origin;
+    const text = `🃏 ポーカーやろう！\nリンク: ${url}\nルームコード: ${state.code}\n（合い言葉も忘れずに伝えてね）`;
+    if (navigator.share) {
+      try { await navigator.share({ title: '仲間内ホールデム', text }); return; } catch (e) { /* キャンセル時など */ }
     }
+    try { await navigator.clipboard.writeText(text); toast('招待メッセージをコピーしました'); }
+    catch { toast('ルームコード: ' + state.code); }
   }
 
   function streetName(s) {
@@ -617,7 +695,7 @@
     Sound.setEnabled(!Sound.isEnabled());
     updateSoundIcon();
     if (Sound.isEnabled()) { Sound.ensure(); Sound.play('turn'); }
-    toast(Sound.isEnabled() ? '🔊 音: ON' : '🔇 音: OFF');
+    toast(Sound.isEnabled() ? '🔊 音・BGM: ON' : '🔇 音・BGM: OFF');
   });
   $('#btn-reset-stats').addEventListener('click', () => {
     if (state.hostId !== state.youId) return toast('リセットはホストのみ可能です', true);
