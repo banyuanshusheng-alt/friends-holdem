@@ -33,6 +33,7 @@ export class Game {
       folded: false,
       allIn: false,
       hasActed: false,
+      noReraise: false, // ショートオールイン後、再レイズ権を失った状態（コール/フォールドのみ）
     }));
 
     this._deal();
@@ -122,11 +123,15 @@ export class Game {
     } else {
       actions.push('call');
     }
-    // レイズ/ベット可能か（チップがコール額を超える余地があるか）
-    if (seat.player.chips > Math.max(toCall, 0)) {
+    const canOpen = seat.player.chips > Math.max(toCall, 0); // レイズする余地があるか
+    // §6-2: 再レイズ権を失っている席（ショートオールインに直面）はベット/レイズ不可
+    if (canOpen && !seat.noReraise) {
       actions.push(this.currentBet === 0 ? 'bet' : 'raise');
     }
-    actions.push('allin');
+    // オールイン：再レイズ不可の席は「持ちチップがコール額以下（＝実質コール）」のときのみ
+    if (!seat.noReraise || seat.player.chips <= Math.max(toCall, 0)) {
+      actions.push('allin');
+    }
     return {
       actions,
       toCall: Math.max(0, toCall),
@@ -164,6 +169,7 @@ export class Game {
       }
       case 'bet':
       case 'raise': {
+        if (seat.noReraise) return { ok: false, error: 'このベットには再レイズできません（コール/フォールドのみ）' };
         const raiseTo = Math.floor(amount);
         if (!Number.isFinite(raiseTo)) return { ok: false, error: '不正な金額です' };
         const maxTo = seat.streetBet + seat.player.chips;
@@ -177,29 +183,20 @@ export class Game {
         if (raiseTo <= this.currentBet) {
           return { ok: false, error: 'レイズ額が現在のベットを超えていません' };
         }
-        const raiseSize = raiseTo - this.currentBet;
-        if (raiseSize >= this.lastRaiseSize) this.lastRaiseSize = raiseSize;
         this._putIn(seat, raiseTo - seat.streetBet);
-        this.currentBet = raiseTo;
-        // レイズが入ったら他の発言可能者は再度行動が必要
-        for (const s of this.seats) {
-          if (s !== seat && !s.folded && !s.allIn) s.hasActed = false;
-        }
+        this._applyAggression(seat, raiseTo);
         this._log(`${seat.name} が ${this.currentBet} へ${action === 'bet' ? 'ベット' : 'レイズ'}`);
         break;
       }
       case 'allin': {
         const all = seat.player.chips;
         const newStreetBet = seat.streetBet + all;
-        this._putIn(seat, all);
-        if (newStreetBet > this.currentBet) {
-          const raiseSize = newStreetBet - this.currentBet;
-          if (raiseSize >= this.lastRaiseSize) this.lastRaiseSize = raiseSize;
-          this.currentBet = newStreetBet;
-          for (const s of this.seats) {
-            if (s !== seat && !s.folded && !s.allIn) s.hasActed = false;
-          }
+        // 再レイズ不可の席が、コール額を超えてオールイン＝レイズは認めない
+        if (seat.noReraise && newStreetBet > this.currentBet) {
+          return { ok: false, error: 'このベットには再レイズできません（コール/フォールドのみ）' };
         }
+        this._putIn(seat, all);
+        if (newStreetBet > this.currentBet) this._applyAggression(seat, newStreetBet);
         this._log(`${seat.name} がオールイン (${newStreetBet})`);
         break;
       }
@@ -218,6 +215,31 @@ export class Game {
     seat.streetBet += pay;
     seat.committed += pay;
     if (seat.player.chips === 0) seat.allIn = true;
+  }
+
+  // ベット/レイズ/オールインで場のベット額が上がったときの処理。
+  // フルレイズ（増分 >= 直前レイズ幅）なら全員に再レイズ権を含めて手番を回す。
+  // ショートオールイン（フル未満）なら、既にアクション済みの席は再レイズ権を失う（コール/フォールドのみ）。
+  _applyAggression(seat, newStreetBet) {
+    const inc = newStreetBet - this.currentBet;
+    const isFull = inc >= this.lastRaiseSize;
+    this.currentBet = newStreetBet;
+    if (isFull) {
+      this.lastRaiseSize = inc;
+      for (const s of this.seats) {
+        if (s === seat || s.folded || s.allIn) continue;
+        s.hasActed = false;   // もう一度アクションが必要
+        s.noReraise = false;  // ベッティングが再オープン＝再レイズ権も復活
+      }
+      seat.noReraise = false;
+    } else {
+      // ショートオールイン：コール額は上がるが再レイズ権は復活しない
+      for (const s of this.seats) {
+        if (s === seat || s.folded || s.allIn) continue;
+        if (s.hasActed) s.noReraise = true; // アクション済み → 以降はコール/フォールドのみ
+        // 未アクションの席はそのまま（満額の選択肢を保持）
+      }
+    }
   }
 
   _bettingRoundComplete() {
@@ -255,6 +277,7 @@ export class Game {
     for (const s of this.seats) {
       s.streetBet = 0;
       s.hasActed = false;
+      s.noReraise = false;
     }
     this.currentBet = 0;
     this.lastRaiseSize = this.blinds.bb;

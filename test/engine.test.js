@@ -93,5 +93,43 @@ for (let n = 2; n <= 6; n++) {
   for (let trial = 0; trial < 200; trial++) chipConservationTest(n);
 }
 
+console.log('=== §6-2 ショートオールインで再レイズ権が復活しない ===');
+{
+  const players = [
+    { id: 'A', name: 'A', chips: 10000 },
+    { id: 'B', name: 'B', chips: 10000 },
+    { id: 'C', name: 'C', chips: 400 }, // BB100を払うと残300 → 合計400までしかオールインできない
+  ];
+  const g = new Game(players, 0, { sb: 50, bb: 100 });
+  assert(g.currentSeat().id === 'A', 'Aが最初の手番（プリフロップ）');
+  assert(g.applyAction('A', 'raise', 300).ok, 'Aが300へフルレイズ');       // inc200 >= 100
+  assert(g.currentSeat().id === 'B', '次はB');
+  assert(g.applyAction('B', 'call').ok, 'Bがコール');
+  assert(g.currentSeat().id === 'C', '次はC');
+  assert(g.applyAction('C', 'allin').ok, 'Cがオールイン(400へ=ショート)');  // inc100 < 200
+  assert(g.currentSeat().id === 'A', 'Aに手番が戻る');
+  const aLegal = g.legalActions();
+  assert(!aLegal.actions.includes('raise'), 'A: 再レイズ不可（ショートオールインでは権利が復活しない）');
+  assert(!aLegal.actions.includes('bet'), 'A: ベットも不可');
+  assert(aLegal.actions.includes('call'), 'A: コールは可能');
+  assert(!g.applyAction('A', 'raise', 800).ok, 'A: レイズ試行は拒否される');
+  assert(g.applyAction('A', 'call').ok, 'A: コールは通る');
+}
+
+console.log('=== フルサイズのオールインは再レイズ権を復活させる ===');
+{
+  const players = [
+    { id: 'A', name: 'A', chips: 10000 },
+    { id: 'B', name: 'B', chips: 10000 },
+    { id: 'C', name: 'C', chips: 600 }, // BB100払って残500 → 600まで（inc300>=200=フル）
+  ];
+  const g = new Game(players, 0, { sb: 50, bb: 100 });
+  assert(g.applyAction('A', 'raise', 300).ok, 'Aが300へレイズ');
+  assert(g.applyAction('B', 'call').ok, 'Bがコール');
+  assert(g.applyAction('C', 'allin').ok, 'Cがオールイン(600へ=フル)');       // inc300 >= 200
+  assert(g.currentSeat().id === 'A', 'Aに手番');
+  assert(g.legalActions().actions.includes('raise'), 'A: フルオールインには再レイズできる');
+}
+
 console.log(`\n結果: ${pass} pass / ${fail} fail`);
 process.exit(fail === 0 ? 0 : 1);
