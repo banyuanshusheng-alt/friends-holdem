@@ -140,7 +140,7 @@
       img.src = charImg(c.id); img.alt = c.name; img.loading = 'lazy';
       av.appendChild(img);
       item.appendChild(av);
-      item.appendChild(el('div', 'char-name', c.name));
+      item.title = c.name;
       item.addEventListener('click', () => {
         selectedChar = c.id;
         localStorage.setItem('holdem_char', c.id);
