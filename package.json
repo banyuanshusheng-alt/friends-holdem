@@ -1,0 +1,21 @@
+{
+  "name": "friends-holdem",
+  "version": "1.0.0",
+  "description": "仲間内で遊ぶオンライン対戦テキサスホールデム",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}
