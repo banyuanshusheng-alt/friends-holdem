@@ -6,6 +6,18 @@
   const RED_SUITS = new Set(['h', 'd']);
   const PALETTE = ['#e8c766', '#4c8dff', '#35c07a', '#e8624a', '#b57edc', '#38b6c4', '#e8a13a', '#ff7eb6', '#8dd35f'];
 
+  // キャラクター定義
+  const CHARS = [
+    { id: 'haru', name: 'ハルくん', color: '#c0392b' },
+    { id: 'hina', name: 'ひなちゃん', color: '#2f6fb0' },
+    { id: 'yan', name: 'ヤンヤン', color: '#3a8a3a' },
+    { id: 'jui', name: 'じゅい', color: '#c96a86' },
+    { id: 'ryu', name: 'りゅうちゃん', color: '#7d5ba6' },
+  ];
+  const charById = (id) => CHARS.find((c) => c.id === id) || CHARS[0];
+  const charImg = (id) => `/chars/${charById(id).id}.png`;
+  let selectedChar = localStorage.getItem('holdem_char') || 'haru';
+
   // ---- 永続 ID（アカウント無しでも再接続で席を保持）----
   function getPlayerId() {
     let id = localStorage.getItem('holdem_pid');
@@ -115,6 +127,30 @@
   function saveName(n) { localStorage.setItem('holdem_name', n); }
   $('#name').value = localStorage.getItem('holdem_name') || '';
 
+  // キャラクター選択（ホーム画面）
+  function renderCharPicker() {
+    const picker = $('#char-picker');
+    if (!picker) return;
+    picker.innerHTML = '';
+    CHARS.forEach((c) => {
+      const item = el('div', 'char-item' + (c.id === selectedChar ? ' selected' : ''));
+      item.style.setProperty('--char-color', c.color);
+      const av = el('div', 'char-avatar');
+      const img = document.createElement('img');
+      img.src = charImg(c.id); img.alt = c.name; img.loading = 'lazy';
+      av.appendChild(img);
+      item.appendChild(av);
+      item.appendChild(el('div', 'char-name', c.name));
+      item.addEventListener('click', () => {
+        selectedChar = c.id;
+        localStorage.setItem('holdem_char', c.id);
+        renderCharPicker();
+      });
+      picker.appendChild(item);
+    });
+  }
+  renderCharPicker();
+
   $('#btn-create').addEventListener('click', () => {
     const name = $('#name').value.trim();
     if (!name) return toast('名前を入力してください', true);
@@ -124,7 +160,7 @@
       sb: Number($('#cfg-sb').value) || 10,
       bb: Number($('#cfg-bb').value) || 20,
     };
-    socket.emit('room:create', { playerId, name, config }, (res) => {
+    socket.emit('room:create', { playerId, name, config, char: selectedChar }, (res) => {
       if (!res.ok) return homeError(res.error);
       enterRoom(res.code);
     });
@@ -136,7 +172,7 @@
     if (!name) return toast('名前を入力してください', true);
     if (code.length !== 4) return toast('4文字のルームコードを入力してください', true);
     saveName(name);
-    socket.emit('room:join', { playerId, name, code }, (res) => {
+    socket.emit('room:join', { playerId, name, code, char: selectedChar }, (res) => {
       if (!res.ok) return homeError(res.error);
       enterRoom(res.code);
     });
@@ -314,6 +350,12 @@
 
       // ポッド
       const pod = el('div', 'seat-pod');
+      // キャラアバター
+      const av = el('div', 'seat-avatar');
+      av.style.setProperty('--char-color', charById(p.char).color);
+      const aimg = document.createElement('img'); aimg.src = charImg(p.char); aimg.alt = '';
+      av.appendChild(aimg);
+      pod.appendChild(av);
       const nameRow = el('div', 'seat-name');
       if (gs && gs.isDealer) nameRow.appendChild(el('span', 'dealer-btn', 'D'));
       nameRow.appendChild(document.createTextNode(p.name));
@@ -397,8 +439,12 @@
       // プレイヤー一覧
       const list = el('div', 'lobby-players');
       state.players.forEach((p) => {
-        const chip = el('div', 'lobby-chip');
-        chip.appendChild(el('span', 'dot' + (p.connected ? '' : ' off')));
+        const chip = el('div', 'lobby-chip' + (p.connected ? '' : ' off'));
+        const av = el('span', 'lobby-avatar');
+        av.style.setProperty('--char-color', charById(p.char).color);
+        const aimg = document.createElement('img'); aimg.src = charImg(p.char); aimg.alt = '';
+        av.appendChild(aimg);
+        chip.appendChild(av);
         chip.appendChild(document.createTextNode(`${p.name}　${fmt(p.chips)}`));
         if (p.isHost) chip.appendChild(el('span', 'you-badge', 'HOST'));
         list.appendChild(chip);

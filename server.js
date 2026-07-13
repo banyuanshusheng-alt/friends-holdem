@@ -55,10 +55,10 @@ io.on('connection', (socket) => {
   });
 
   // 部屋を作成
-  socket.on('room:create', ({ playerId, name, config }, cb) => {
+  socket.on('room:create', ({ playerId, name, config, char }, cb) => {
     if (!gateOk(socket)) return cb?.({ ok: false, error: '合い言葉の認証が必要です' });
     const room = createRoom(config || {});
-    const res = room.addPlayer(playerId, sanitizeName(name));
+    const res = room.addPlayer(playerId, sanitizeName(name), char);
     if (!res.ok) return cb?.({ ok: false, error: res.error });
     room.setConnected(playerId, true, socket.id);
     room.ensureHost();
@@ -69,11 +69,11 @@ io.on('connection', (socket) => {
   });
 
   // 部屋に参加
-  socket.on('room:join', ({ playerId, name, code }, cb) => {
+  socket.on('room:join', ({ playerId, name, code, char }, cb) => {
     if (!gateOk(socket)) return cb?.({ ok: false, error: '合い言葉の認証が必要です' });
     const room = getRoom(code);
     if (!room) return cb?.({ ok: false, error: '部屋が見つかりません。コードを確認してください' });
-    const res = room.addPlayer(playerId, sanitizeName(name));
+    const res = room.addPlayer(playerId, sanitizeName(name), char);
     if (!res.ok) return cb?.({ ok: false, error: res.error });
     room.setConnected(playerId, true, socket.id);
     room.ensureHost();
@@ -144,6 +144,12 @@ io.on('connection', (socket) => {
     if (room.hostId !== pid) return cb?.({ ok: false, error: 'ホストのみチップ追加できます' });
     const res = room.rebuy(playerId, amount);
     cb?.(res);
+    broadcastRoom(room);
+  }));
+
+  socket.on('player:char', ({ char }, cb) => withRoom(cb, (room, pid) => {
+    room.setChar(pid, char);
+    cb?.({ ok: true });
     broadcastRoom(room);
   }));
 

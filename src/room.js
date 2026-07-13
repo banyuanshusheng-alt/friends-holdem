@@ -36,12 +36,13 @@ export class Room {
     return this.players.filter((p) => p.connected && p.chips > 0 && !p.sittingOut);
   }
 
-  addPlayer(id, name) {
+  addPlayer(id, name, char) {
     let p = this.getPlayer(id);
     if (p) {
       // 再接続
       p.connected = true;
       p.name = name || p.name;
+      if (char) p.char = char;
       this.touch();
       return { ok: true, player: p, rejoined: true };
     }
@@ -51,6 +52,7 @@ export class Room {
     p = {
       id,
       name: name || 'プレイヤー',
+      char: char || 'haru',
       chips: this.config.startingChips,
       connected: true,
       socketId: null,
@@ -74,6 +76,11 @@ export class Room {
     p.connected = connected;
     if (socketId !== undefined) p.socketId = socketId;
     this.touch();
+  }
+
+  setChar(id, char) {
+    const p = this.getPlayer(id);
+    if (p && char) { p.char = char; this.touch(); }
   }
 
   // ホストを確定する。作成者が接続中なら常に作成者へ戻す。
@@ -232,6 +239,7 @@ export class Room {
       players: this.players.map((p) => ({
         id: p.id,
         name: p.name,
+        char: p.char || 'haru',
         chips: p.chips,
         connected: p.connected,
         sittingOut: p.sittingOut,
