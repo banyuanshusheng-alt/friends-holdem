@@ -13,6 +13,15 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <!-- 接続中（起動待ち）の表示。最初に必ず出て、接続できたら消える -->
+  <div id="loading" class="screen loading-screen">
+    <div class="loading-inner">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="loading-title">接続中…</p>
+      <p class="loading-sub">初めての接続やしばらくぶりの場合、起動に30〜60秒ほどかかることがあります。<br>そのままお待ちください。</p>
+    </div>
+  </div>
+
   <!-- 合い言葉ロック画面（サーバーで ACCESS_CODE 設定時のみ表示） -->
   <main id="gate" class="screen home" hidden>
     <div class="home-card">

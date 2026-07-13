@@ -55,6 +55,18 @@ button, input { font-family: inherit; }
 .screen { min-height: 100dvh; }
 [hidden] { display: none !important; }
 
+/* 接続中（起動待ち）画面 */
+.loading-screen { display: grid; place-items: center; padding: var(--sp-4); text-align: center; }
+.loading-inner { max-width: 320px; }
+.spinner {
+  width: 44px; height: 44px; margin: 0 auto var(--sp-3);
+  border: 3px solid var(--line); border-top-color: var(--gold);
+  border-radius: 50%; animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-title { font-size: 1.15rem; font-weight: 700; }
+.loading-sub { color: var(--muted); font-size: .85rem; margin-top: var(--sp-2); line-height: 1.7; }
+
 /* ===================== 共通コンポーネント ===================== */
 .btn {
   appearance: none; border: 1px solid var(--line);

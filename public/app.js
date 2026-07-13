@@ -31,9 +31,10 @@
   }
 
   // ================= 画面遷移 =================
-  function showGate() { $('#gate').hidden = false; $('#home').hidden = true; $('#game').hidden = true; }
-  function showHome() { $('#gate').hidden = true; $('#home').hidden = false; $('#game').hidden = true; }
-  function showGame() { $('#gate').hidden = true; $('#home').hidden = true; $('#game').hidden = false; }
+  function hideLoading() { const l = $('#loading'); if (l) l.hidden = true; }
+  function showGate() { hideLoading(); $('#gate').hidden = false; $('#home').hidden = true; $('#game').hidden = true; }
+  function showHome() { hideLoading(); $('#gate').hidden = true; $('#home').hidden = false; $('#game').hidden = true; }
+  function showGame() { hideLoading(); $('#gate').hidden = true; $('#home').hidden = true; $('#game').hidden = false; }
 
   // ================= 合い言葉ロック =================
   // 認証済みなら保存された部屋へ復帰、未認証ならホームを表示
