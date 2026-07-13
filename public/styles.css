@@ -268,36 +268,39 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 .you-badge { color: var(--gold); font-size: .62rem; }
 .seat-hand { font-size: .66rem; color: var(--muted); margin-top: 2px; }
 
-/* --- キャラアバター --- */
-.seat-avatar {
-  width: 36px; height: 36px; border-radius: 50%; overflow: hidden; margin: 0 auto 3px;
-  border: 2px solid var(--char-color, var(--gold)); background: var(--bg-2);
+/* --- キャラアバター（金貨風メダル）--- */
+/* 金の縁取り＝グラデ背景 + padding。中の顔画像がコインの絵柄。 */
+.seat-avatar, .lobby-avatar, .char-avatar {
+  border-radius: 50%;
+  background: linear-gradient(140deg, #fff2bf 0%, #e8c766 22%, #9e7825 52%, #e8c766 78%, #fff2bf 100%);
+  box-shadow: 0 2px 6px rgba(0,0,0,.5), 0 0 12px rgba(232,199,102,.28);
 }
-.seat-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.lobby-avatar {
-  width: 22px; height: 22px; border-radius: 50%; overflow: hidden; flex: none;
-  border: 1.5px solid var(--char-color, var(--gold)); background: var(--bg-2);
+.seat-avatar img, .lobby-avatar img, .char-avatar img {
+  width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.4);
 }
-.lobby-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.seat-avatar { width: 40px; height: 40px; padding: 3px; margin: 0 auto 3px; }
+.lobby-avatar { width: 24px; height: 24px; padding: 2px; flex: none; }
 .lobby-chip.off { opacity: .5; }
 
-/* --- キャラ選択（ホーム） --- */
-.char-picker { display: flex; gap: 6px; }
+/* --- キャラ選択（ホーム）：金貨を並べ、選択中を強調 --- */
+.char-picker { display: flex; gap: 8px; }
 .char-item {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  cursor: pointer; padding: 6px 2px; border-radius: 10px;
-  border: 1px solid transparent; transition: background .15s ease, border-color .15s ease;
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  cursor: pointer; padding: 4px 0; opacity: .5;
+  transition: opacity .15s ease, transform .15s ease;
 }
-.char-item:hover { background: var(--bg-2); }
-.char-item.selected { border-color: var(--char-color); background: rgba(255,255,255,.05); }
+.char-item:hover { opacity: .85; }
+.char-item.selected { opacity: 1; }
 .char-avatar {
-  width: 100%; max-width: 54px; aspect-ratio: 1; border-radius: 50%; overflow: hidden;
-  border: 2px solid var(--char-color); box-shadow: var(--shadow-1);
+  width: 100%; max-width: 54px; aspect-ratio: 1; padding: 3px;
 }
-.char-item.selected .char-avatar { box-shadow: 0 0 0 2px var(--char-color), var(--shadow-1); }
-.char-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.char-name { font-size: .62rem; color: var(--muted); white-space: nowrap; }
-.char-item.selected .char-name { color: var(--text); font-weight: 700; }
+.char-item.selected .char-avatar {
+  box-shadow: 0 2px 6px rgba(0,0,0,.5), 0 0 18px rgba(232,199,102,.65);
+  transform: scale(1.06);
+}
+.char-name { font-size: .62rem; color: var(--faint); white-space: nowrap; }
+.char-item.selected .char-name { color: var(--gold); font-weight: 700; }
 
 /* --- アクションバー --- */
 .action-bar {
@@ -479,7 +482,7 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
   .seat-cards { height: 42px; }
   .card.small { width: 26px; height: 38px; }
   .card.big { width: 42px; height: 59px; }
-  .seat-avatar { width: 30px; height: 30px; margin-bottom: 2px; }
+  .seat-avatar { width: 34px; height: 34px; padding: 2px; margin-bottom: 2px; }
   /* トップバー：コード＋アイコン3つが収まるよう詰める */
   .topbar { gap: 4px; padding-left: var(--sp-2); padding-right: var(--sp-2); }
   .room-meta { gap: var(--sp-2); }
