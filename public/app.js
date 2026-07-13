@@ -21,6 +21,59 @@
   let state = null;   // 直近の room:state
   let currentCode = null;
 
+  // 演出用：前回状態の記憶
+  let prevLog = '';
+  let prevToActId = null;
+  let celebratedHand = -1;
+  let firstEffect = true;
+
+  // ================= サウンド（Web Audioで合成。音声ファイル不要） =================
+  const Sound = (() => {
+    let ctx = null;
+    let enabled = localStorage.getItem('holdem_sound') !== 'off';
+    function ensure() {
+      if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
+      if (ctx && ctx.state === 'suspended') ctx.resume();
+    }
+    function blip(freq, start, dur, opt) {
+      if (!ctx) return;
+      opt = opt || {};
+      const t0 = ctx.currentTime + start;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = opt.type || 'sine';
+      osc.frequency.setValueAtTime(freq, t0);
+      if (opt.sweep) osc.frequency.exponentialRampToValueAtTime(opt.sweep, t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(opt.vol || 0.16, t0 + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g).connect(ctx.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.03);
+    }
+    function chip(start, n) {
+      for (let i = 0; i < (n || 1); i++) blip(1150 + Math.random() * 450, start + i * 0.05, 0.06, { type: 'triangle', vol: 0.11 });
+    }
+    const sounds = {
+      deal: () => { for (let i = 0; i < 3; i++) blip(560, i * 0.06, 0.05, { type: 'triangle', vol: 0.08 }); },
+      check: () => blip(300, 0, 0.1, { type: 'sine', vol: 0.14 }),
+      call: () => chip(0, 2),
+      bet: () => chip(0, 3),
+      raise: () => { chip(0, 3); blip(480, 0, 0.13, { type: 'sine', vol: 0.09, sweep: 760 }); },
+      allin: () => { blip(280, 0, 0.5, { type: 'sawtooth', vol: 0.11, sweep: 720 }); chip(0.12, 4); },
+      fold: () => blip(360, 0, 0.24, { type: 'sine', vol: 0.12, sweep: 150 }),
+      turn: () => { blip(880, 0, 0.12, { type: 'sine', vol: 0.14 }); blip(1320, 0.1, 0.13, { type: 'sine', vol: 0.11 }); },
+      win: () => { [523, 659, 784, 1047].forEach((f, i) => blip(f, i * 0.09, 0.22, { type: 'triangle', vol: 0.16 })); },
+      youwin: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => blip(f, i * 0.08, 0.26, { type: 'triangle', vol: 0.19 })); chip(0.22, 5); },
+    };
+    function play(name) { if (!enabled) return; ensure(); if (!ctx) return; (sounds[name] || (() => {}))(); }
+    function setEnabled(v) { enabled = v; localStorage.setItem('holdem_sound', v ? 'on' : 'off'); if (v) ensure(); }
+    function isEnabled() { return enabled; }
+    return { play, setEnabled, isEnabled, ensure };
+  })();
+  // 最初のユーザー操作でオーディオを有効化（ブラウザ制約）
+  document.addEventListener('click', () => Sound.ensure(), { once: true });
+  document.addEventListener('touchstart', () => Sound.ensure(), { once: true });
+
   // ================= トースト =================
   let toastTimer;
   function toast(msg, isErr) {
@@ -151,7 +204,67 @@
     renderBoard();
     renderActionBar(you, isHost);
     renderLog();
+    handleEffects();
     if (!$('#stats-panel').hidden) renderStats();
+  }
+
+  // ================= 演出（音・勝利バナー） =================
+  function handleEffects() {
+    const g = state.game;
+    const lastLog = g && g.log && g.log.length ? g.log[g.log.length - 1] : '';
+    const toAct = g ? g.toActId : null;
+    // 初回（入室/リロード直後）は鳴らさず、基準だけ記録
+    if (firstEffect) {
+      firstEffect = false;
+      prevLog = lastLog; prevToActId = toAct;
+      if (state.state === 'handover' && g && g.result) celebratedHand = state.handNumber;
+      return;
+    }
+    // 1) 直近ログの変化で効果音
+    if (lastLog && lastLog !== prevLog) { playForLog(lastLog); prevLog = lastLog; }
+    // 2) 自分の手番になったら通知音
+    if (toAct && toAct === state.youId && prevToActId !== state.youId && state.state === 'playing') Sound.play('turn');
+    prevToActId = toAct;
+    // 3) 勝敗演出（handover に入って結果が出た初回のみ）
+    if (state.state === 'handover' && g && g.result && celebratedHand !== state.handNumber) {
+      celebratedHand = state.handNumber;
+      celebrate(g.result);
+    }
+  }
+
+  function playForLog(line) {
+    if (line.includes('フォールド')) Sound.play('fold');
+    else if (line.includes('チェック')) Sound.play('check');
+    else if (line.includes('オールイン')) Sound.play('allin');
+    else if (line.includes('レイズ') || line.includes('ベット')) Sound.play('raise');
+    else if (line.includes('コール')) Sound.play('call');
+    else if (line.includes('フロップ') || line.includes('ターン') || line.includes('リバー') || line.includes('ブラインド投入')) Sound.play('deal');
+  }
+
+  function celebrate(result) {
+    const winners = new Set();
+    result.pots.forEach((p) => p.winners.forEach((w) => winners.add(w)));
+    const youWon = winners.has(state.youId);
+    const names = [...winners].map((id) => (result.players.find((p) => p.id === id) || {}).name).filter(Boolean);
+    const total = result.pots.reduce((s, p) => s + p.amount, 0);
+    Sound.play(youWon ? 'youwin' : 'win');
+    const wp = result.players.find((p) => p.id === [...winners][0]);
+    const handName = wp && wp.hand ? wp.hand.category : '';
+    showWinBanner(youWon, names.join('・'), total, handName);
+  }
+
+  let winBannerTimer;
+  function showWinBanner(youWon, names, total, handName) {
+    const b = $('#win-banner');
+    b.className = 'win-banner' + (youWon ? ' you' : '');
+    b.innerHTML = `<div class="wb-inner">
+      <div class="wb-title">${youWon ? '🎉 あなたの勝ち！' : '🏆 ' + names + ' の勝ち'}</div>
+      <div class="wb-amount">+${fmt(total)} 獲得</div>
+      ${handName ? `<div class="wb-hand">${handName}</div>` : ''}
+    </div>`;
+    b.hidden = false;
+    clearTimeout(winBannerTimer);
+    winBannerTimer = setTimeout(() => { b.hidden = true; }, 3200);
   }
 
   // 席配置：相手は上側の弧に、自分は常に下中央に固定
@@ -163,6 +276,7 @@
     const seatById = {};
     for (const gs of gameSeats) seatById[gs.id] = gs;
 
+    const narrow = window.innerWidth <= 560;
     const youIdx = players.findIndex((p) => p.id === state.youId);
     const opponents = players.filter((_, i) => i !== youIdx);
     const layout = []; // { player, x, y, isYou }
@@ -172,9 +286,10 @@
       // 上側の弧（200°〜340°、270°が真上）に均等配置
       const deg = m === 1 ? 270 : 200 + (140 * k) / (m - 1);
       const th = (deg * Math.PI) / 180;
-      layout.push({ player: p, x: 50 + 41 * Math.cos(th), y: 44 + 37 * Math.sin(th), isYou: false });
+      layout.push({ player: p, x: 50 + 41 * Math.cos(th), y: (narrow ? 42 : 44) + 37 * Math.sin(th), isYou: false });
     });
-    if (youIdx !== -1) layout.push({ player: players[youIdx], x: 50, y: 88, isYou: true });
+    // 自分は下中央。スマホは少し上げてアクションバーとの被りを防ぐ
+    if (youIdx !== -1) layout.push({ player: players[youIdx], x: 50, y: narrow ? 83 : 87, isYou: true });
 
     layout.forEach(({ player: p, x, y, isYou }) => {
       const gs = seatById[p.id];
@@ -211,7 +326,7 @@
       const resultPlayer = state.game && state.game.result
         ? state.game.result.players.find((rp) => rp.id === p.id) : null;
       const won = resultPlayer && resultPlayer.won > 0;
-      if (won) pod.appendChild(el('span', 'seat-tag tag-win', `+${fmt(resultPlayer.won)}`));
+      if (won) { seat.classList.add('winner'); pod.appendChild(el('span', 'seat-tag tag-win', `+${fmt(resultPlayer.won)}`)); }
       else if (gs && gs.allIn) pod.appendChild(el('span', 'seat-tag tag-allin', 'ALL IN'));
       else if (!gs && state.state !== 'lobby') pod.appendChild(el('span', 'seat-tag tag-off', p.sittingOut ? '見学' : (p.chips <= 0 ? 'チップ切れ' : '待機')));
       if (!p.connected) pod.appendChild(el('span', 'seat-tag tag-out', 'オフライン'));
@@ -399,15 +514,71 @@
   // ================= 成績パネル =================
   $('#btn-stats').addEventListener('click', () => { $('#stats-panel').hidden = false; renderStats(); });
   $('#stats-panel').addEventListener('click', (e) => { if (e.target.dataset.close !== undefined) $('#stats-panel').hidden = true; });
-  document.querySelectorAll('.stats-tabs .tab').forEach((tab) => {
+  document.querySelectorAll('#stats-panel .stats-tabs .tab').forEach((tab) => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.stats-tabs .tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('#stats-panel .stats-tabs .tab').forEach((t) => t.classList.remove('active'));
       tab.classList.add('active');
       const which = tab.dataset.tab;
       $('#tab-board').hidden = which !== 'board';
       $('#tab-graph').hidden = which !== 'graph';
       if (which === 'graph') renderChart();
     });
+  });
+
+  // ================= 遊び方・役パネル =================
+  $('#btn-info').addEventListener('click', () => { $('#info-panel').hidden = false; buildHandRankings(); });
+  $('#info-panel').addEventListener('click', (e) => { if (e.target.dataset.close !== undefined) $('#info-panel').hidden = true; });
+  document.querySelectorAll('#info-panel .stats-tabs .tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('#info-panel .stats-tabs .tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      const which = tab.dataset.itab;
+      $('#itab-rules').hidden = which !== 'rules';
+      $('#itab-hands').hidden = which !== 'hands';
+      if (which === 'hands') buildHandRankings();
+    });
+  });
+
+  function buildHandRankings() {
+    const wrap = $('#hand-rankings');
+    if (wrap.dataset.built) return;
+    wrap.dataset.built = '1';
+    const C = (r, s) => ({ rank: r, suit: s });
+    const list = [
+      ['ロイヤルフラッシュ', '同じマークの 10・J・Q・K・A（最強）', [C(10, 's'), C(11, 's'), C(12, 's'), C(13, 's'), C(14, 's')]],
+      ['ストレートフラッシュ', '同じマークで数字が5枚連続', [C(5, 'h'), C(6, 'h'), C(7, 'h'), C(8, 'h'), C(9, 'h')]],
+      ['フォーカード', '同じ数字が4枚', [C(9, 'c'), C(9, 'd'), C(9, 'h'), C(9, 's'), C(14, 'd')]],
+      ['フルハウス', 'スリーカード＋ワンペア', [C(13, 's'), C(13, 'h'), C(13, 'd'), C(5, 'c'), C(5, 'h')]],
+      ['フラッシュ', '同じマークが5枚（連続でなくてOK）', [C(2, 's'), C(5, 's'), C(8, 's'), C(11, 's'), C(13, 's')]],
+      ['ストレート', '数字が5枚連続（マークはバラバラ）', [C(4, 'c'), C(5, 'd'), C(6, 'h'), C(7, 's'), C(8, 'c')]],
+      ['スリーカード', '同じ数字が3枚', [C(12, 's'), C(12, 'h'), C(12, 'd'), C(7, 'c'), C(2, 'h')]],
+      ['ツーペア', 'ペアが2組', [C(11, 's'), C(11, 'h'), C(4, 'd'), C(4, 'c'), C(9, 's')]],
+      ['ワンペア', 'ペアが1組', [C(14, 's'), C(14, 'd'), C(8, 'c'), C(6, 'h'), C(3, 's')]],
+      ['ハイカード', '役なし。一番高い数字で勝負', [C(14, 's'), C(11, 'd'), C(8, 'h'), C(5, 'c'), C(2, 'd')]],
+    ];
+    list.forEach(([name, desc, cards], i) => {
+      const row = el('div', 'hr-row' + (i === 0 ? ' top' : ''));
+      row.appendChild(el('div', 'hr-rank', String(i + 1)));
+      const info = el('div', 'hr-info');
+      info.appendChild(el('div', 'hr-name', name));
+      info.appendChild(el('div', 'hr-desc', desc));
+      row.appendChild(info);
+      const cs = el('div', 'hr-cards');
+      cards.forEach((c) => cs.appendChild(cardEl(c, 'mini')));
+      row.appendChild(cs);
+      wrap.appendChild(row);
+    });
+  }
+
+  // ================= 音のON/OFF =================
+  const btnSound = $('#btn-sound');
+  function updateSoundIcon() { btnSound.textContent = Sound.isEnabled() ? '🔊' : '🔇'; }
+  updateSoundIcon();
+  btnSound.addEventListener('click', () => {
+    Sound.setEnabled(!Sound.isEnabled());
+    updateSoundIcon();
+    if (Sound.isEnabled()) { Sound.ensure(); Sound.play('turn'); }
+    toast(Sound.isEnabled() ? '🔊 音: ON' : '🔇 音: OFF');
   });
   $('#btn-reset-stats').addEventListener('click', () => {
     if (state.hostId !== state.youId) return toast('リセットはホストのみ可能です', true);

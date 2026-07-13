@@ -108,8 +108,15 @@
         </button>
         <span id="hand-label" class="hand-label"></span>
       </div>
-      <button id="btn-stats" class="icon-btn" title="成績">📊</button>
+      <div class="topbar-actions">
+        <button id="btn-sound" class="icon-btn" title="音のON/OFF">🔊</button>
+        <button id="btn-info" class="icon-btn" title="遊び方・役">📖</button>
+        <button id="btn-stats" class="icon-btn" title="成績">📊</button>
+      </div>
     </header>
+
+    <!-- 勝利バナー（上がった時の演出） -->
+    <div id="win-banner" class="win-banner" hidden></div>
 
     <section id="table-wrap" class="table-wrap">
       <div class="felt">
@@ -151,6 +158,48 @@
       <div class="stats-foot">
         <button id="btn-reset-stats" class="btn btn-danger btn-block">勝敗推移をリセット</button>
         <p class="stats-note">リセットすると、以降の損益は現在のチップを基準に計算し直します。</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 遊び方・役の一覧パネル -->
+  <aside id="info-panel" class="stats-panel" hidden>
+    <div class="stats-backdrop" data-close></div>
+    <div class="stats-sheet">
+      <div class="stats-head">
+        <h2>遊び方 &amp; 役</h2>
+        <button class="icon-btn" data-close title="閉じる">✕</button>
+      </div>
+      <div class="stats-tabs">
+        <button class="tab active" data-itab="rules">遊び方</button>
+        <button class="tab" data-itab="hands">役の強さ</button>
+      </div>
+      <div id="itab-rules" class="tab-body">
+        <div class="rules">
+          <h3>テキサスホールデムの流れ</h3>
+          <ol class="rule-steps">
+            <li><b>手札が配られる</b><span>自分だけに見える2枚が配られます。</span></li>
+            <li><b>ベット（プリフロップ）</b><span>手札を見て、賭ける／降りるを選びます。</span></li>
+            <li><b>フロップ（場に3枚）</b><span>共通カード3枚が公開され、再びベット。</span></li>
+            <li><b>ターン（4枚目）</b><span>共通カードが1枚追加され、再びベット。</span></li>
+            <li><b>リバー（5枚目）</b><span>最後の共通カードが公開され、最終ベット。</span></li>
+            <li><b>ショーダウン</b><span>手札2枚＋場の5枚＝7枚から<b>最強の5枚</b>で勝負。一番強い人がポットを総取り。</span></li>
+          </ol>
+          <h3>アクション</h3>
+          <ul class="rule-actions">
+            <li><b>チェック</b>：誰も賭けていない時、賭けずに次へ回す</li>
+            <li><b>ベット</b>：最初にチップを賭ける</li>
+            <li><b>コール</b>：直前の人と同額を出す</li>
+            <li><b>レイズ</b>：さらに上乗せして額を吊り上げる</li>
+            <li><b>フォールド</b>：降りる（賭けたチップは失うが、それ以上の損を防ぐ）</li>
+            <li><b>オールイン</b>：持ちチップを全部賭ける</li>
+          </ul>
+          <p class="rules-note">親（ディーラー<span class="mini-d">D</span>）の左隣2人は強制参加費「ブラインド（SB / BB）」を払います。</p>
+        </div>
+      </div>
+      <div id="itab-hands" class="tab-body" hidden>
+        <p class="hands-lead">5枚で作る役の一覧（上ほど強い）。同じ役なら数字が大きい方が勝ち。</p>
+        <div id="hand-rankings" class="hand-rankings"></div>
       </div>
     </div>
   </aside>

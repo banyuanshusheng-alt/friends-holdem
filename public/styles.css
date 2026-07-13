@@ -45,7 +45,11 @@
 html, body { height: 100%; }
 body {
   font-family: var(--ff);
-  background: radial-gradient(120% 100% at 50% -10%, #1b1f2b 0%, var(--bg) 55%);
+  /* 高級ラウンジ風：上からの暖色の照明 → 深い闇へ */
+  background:
+    radial-gradient(70% 50% at 50% -6%, rgba(232,199,102,.12) 0%, transparent 55%),
+    radial-gradient(130% 100% at 50% 0%, #23252f 0%, #14161c 42%, #0b0c10 100%);
+  background-attachment: fixed;
   color: var(--text);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -159,13 +163,24 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 /* --- テーブル --- */
 .table-wrap { flex: 1; display: grid; place-items: center; padding: var(--sp-4) var(--sp-3); min-height: 0; }
 .felt {
-  position: relative; width: 100%; max-width: 680px; aspect-ratio: 16 / 11;
+  position: relative; width: 100%; max-width: 700px; aspect-ratio: 16 / 11;
   max-height: 62vh;
   border-radius: 46% / 50%;
+  /* 深いフェルト＋中央上からのスポットライト */
   background:
-    radial-gradient(120% 120% at 50% 30%, #257a5c 0%, var(--felt) 45%, var(--felt-dark) 100%);
-  border: 10px solid var(--felt-rail);
-  box-shadow: inset 0 0 60px rgba(0,0,0,.45), var(--shadow-2);
+    radial-gradient(58% 46% at 50% 20%, #2f8a66 0%, #22704f 34%, #14472f 74%, #0e3524 100%);
+  /* レザー/ウッド調の縁（ダークブラウン）＋内側にゴールドのトリム */
+  border: 15px solid #17110b;
+  box-shadow:
+    inset 0 0 0 2px rgba(232,199,102,.4),
+    inset 0 0 90px rgba(0,0,0,.5),
+    inset 0 6px 26px rgba(255,255,255,.05),
+    0 30px 70px rgba(0,0,0,.62),
+    0 0 0 1px rgba(232,199,102,.12);
+}
+.felt::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(58% 42% at 50% 22%, rgba(255,248,222,.15) 0%, transparent 62%);
 }
 .table-center {
   position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -218,7 +233,16 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
   padding: 5px 8px; min-width: 96px; text-align: center; box-shadow: var(--shadow-1);
   transition: border-color .2s ease, box-shadow .2s ease, opacity .2s ease;
 }
-.seat.is-turn .seat-pod { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(232,199,102,.35), var(--shadow-1); }
+.seat.is-turn .seat-pod { border-color: var(--gold); animation: turnPulse 1.4s ease-in-out infinite; }
+@keyframes turnPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(232,199,102,.35), var(--shadow-1); }
+  50% { box-shadow: 0 0 0 2px rgba(232,199,102,.8), 0 0 18px rgba(232,199,102,.45), var(--shadow-1); }
+}
+.seat.winner .seat-pod { border-color: var(--gold); animation: winnerGlow 1s ease-in-out infinite; }
+@keyframes winnerGlow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(232,199,102,.6), var(--shadow-1); }
+  50% { box-shadow: 0 0 0 3px rgba(232,199,102,1), 0 0 28px rgba(232,199,102,.6), var(--shadow-1); }
+}
 .seat.folded { opacity: .5; }
 .seat.folded .seat-cards { opacity: .35; }
 .seat-name {
@@ -353,20 +377,86 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 .toast.err { border-color: rgba(232,98,74,.6); color: #ffb3a6; }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
 
+/* ===================== トップバーのボタン群 ===================== */
+.topbar-actions { display: flex; align-items: center; gap: 6px; }
+
+/* ===================== 勝利バナー（演出） ===================== */
+.win-banner {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 70px);
+  transform: translateX(-50%);
+  z-index: 62; pointer-events: none; text-align: center; width: max-content; max-width: 90vw;
+  animation: winPop .45s cubic-bezier(.2, 1.5, .4, 1) both;
+}
+.win-banner .wb-inner {
+  background: linear-gradient(180deg, #262b3b, #14161c);
+  border: 1px solid var(--gold); border-radius: 16px; padding: 14px 28px;
+  box-shadow: 0 0 0 1px rgba(232,199,102,.3), 0 22px 60px rgba(0,0,0,.7), 0 0 44px rgba(232,199,102,.28);
+}
+.win-banner.you .wb-inner { box-shadow: 0 0 0 1px rgba(232,199,102,.55), 0 22px 60px rgba(0,0,0,.7), 0 0 70px rgba(232,199,102,.5); }
+.wb-title { font-size: 1.5rem; font-weight: 800; color: var(--gold); letter-spacing: .02em; }
+.wb-sub { color: var(--text); margin-top: 2px; font-weight: 600; font-size: .95rem; }
+.wb-amount { color: var(--green); font-weight: 800; font-size: 1.15rem; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.wb-hand { color: var(--muted); font-size: .82rem; margin-top: 2px; }
+@keyframes winPop { from { opacity: 0; transform: translateX(-50%) translateY(-16px) scale(.92); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+
+/* ===================== 遊び方パネル ===================== */
+.rules h3 { font-size: 1rem; margin: 4px 0 12px; color: var(--gold); }
+.rule-steps { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 22px; counter-reset: step; }
+.rule-steps li { position: relative; padding-left: 36px; }
+.rule-steps li::before {
+  counter-increment: step; content: counter(step);
+  position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%;
+  background: linear-gradient(180deg, var(--gold), var(--gold-dim)); color: #201a08;
+  font-weight: 800; font-size: .82rem; display: grid; place-items: center;
+}
+.rule-steps li b { display: block; font-size: .92rem; margin-bottom: 1px; }
+.rule-steps li span { color: var(--muted); font-size: .85rem; line-height: 1.6; }
+.rule-actions { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.rule-actions li { font-size: .87rem; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; }
+.rule-actions li b { color: var(--gold); }
+.rules-note { font-size: .82rem; color: var(--muted); background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 11px; line-height: 1.8; }
+.mini-d { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #fff; color: #111; font-size: .58rem; font-weight: 800; vertical-align: middle; margin: 0 2px; }
+
+/* ===================== 役の強さ一覧 ===================== */
+.hands-lead { font-size: .82rem; color: var(--muted); margin-bottom: 12px; line-height: 1.7; }
+.hand-rankings { display: flex; flex-direction: column; gap: 8px; }
+.hr-row { display: flex; align-items: center; gap: 10px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.hr-row.top { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(232,199,102,.25); }
+.hr-rank { width: 20px; text-align: center; font-weight: 800; color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+.hr-row.top .hr-rank { color: var(--gold); }
+.hr-info { flex: 1; min-width: 0; }
+.hr-name { font-weight: 700; font-size: .9rem; }
+.hr-desc { color: var(--muted); font-size: .74rem; line-height: 1.4; }
+.hr-cards { display: flex; gap: 2px; flex: none; }
+.card.mini { width: 23px; height: 32px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.card.mini .rank { font-size: .64rem; }
+.card.mini .suit { font-size: .55rem; margin-top: 0; }
+
 /* ===================== レスポンシブ ===================== */
 @media (max-width: 560px) {
-  /* 縦長の楕円にして、上の相手と中央のボード・下の自分が重ならないようにする */
-  .felt { border-width: 8px; max-width: 100%; aspect-ratio: 5 / 7; max-height: 66vh; }
-  .table-wrap { padding: var(--sp-3) var(--sp-2); align-items: center; }
+  /* 縦長の楕円。テーブルを少し低めにして、下の自分の席がアクションバーに被らないようにする */
+  .felt { border-width: 12px; max-width: 100%; aspect-ratio: 1 / 1.16; max-height: 54vh; }
+  /* 中央のポット・共通カードを上寄せにして、下の自分のカードと重ならないように */
+  .table-center { justify-content: flex-start; padding-top: 24%; gap: 8px; }
+  .table-wrap { padding: var(--sp-2) var(--sp-2) var(--sp-4); align-items: center; }
   .community { gap: 4px; }
   .card { width: 34px; height: 48px; }
   .card .rank { font-size: .98rem; }
   .seat { width: 96px; }
-  .seat-pod { min-width: 80px; padding: 4px 6px; }
-  .seat-name { max-width: 76px; font-size: .76rem; }
+  .seat-pod { min-width: 78px; padding: 4px 6px; }
+  .seat-name { max-width: 74px; font-size: .76rem; }
   .seat-cards { height: 42px; }
   .card.small { width: 26px; height: 38px; }
-  .card.big { width: 44px; height: 62px; }
+  .card.big { width: 42px; height: 59px; }
+  /* トップバー：コード＋アイコン3つが収まるよう詰める */
+  .topbar { gap: 4px; padding-left: var(--sp-2); padding-right: var(--sp-2); }
+  .room-meta { gap: var(--sp-2); }
+  .hand-label { display: none; }
+  .icon-btn { width: 36px; height: 36px; font-size: 1rem; }
+  .topbar-actions { gap: 4px; }
+  .code-chip { padding: 6px 9px; }
+  .win-banner .wb-inner { padding: 15px 22px; }
+  .wb-title { font-size: 1.25rem; }
 }
 @media (min-width: 900px) {
   .game { max-width: 100%; }
