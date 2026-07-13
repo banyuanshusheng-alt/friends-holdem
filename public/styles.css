@@ -279,9 +279,32 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
   width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.3);
 }
-.seat-avatar { width: 42px; height: 42px; padding: 2px; margin: 0 auto 3px; }
+.seat-avatar { position: relative; width: 56px; height: 56px; padding: 2.5px; margin: 0 auto 4px; }
 .lobby-avatar { width: 26px; height: 26px; padding: 1.5px; flex: none; }
 .lobby-chip.off { opacity: .5; }
+
+/* 手番・勝者はアバター（顔）を光らせる */
+.seat.is-turn .seat-avatar { animation: turnPulse 1.4s ease-in-out infinite; }
+.seat.winner .seat-avatar { animation: winnerGlow 1s ease-in-out infinite; }
+
+/* ディーラーボタン・あなた表示をアバターに重ねる */
+.dealer-badge {
+  position: absolute; bottom: -2px; right: -2px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; color: #111; font-size: .66rem; font-weight: 800;
+  display: grid; place-items: center; border: 2px solid var(--bg-2); box-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+.you-tag {
+  position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+  background: linear-gradient(180deg, var(--gold), var(--gold-dim)); color: #201a08;
+  font-size: .56rem; font-weight: 800; padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+.seat-info { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
+.seat-chips {
+  background: rgba(0,0,0,.55); color: var(--gold); font-weight: 800; font-size: .9rem;
+  font-variant-numeric: tabular-nums; padding: 2px 12px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.09); box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
 
 /* --- キャラ選択（ホーム）：顔だけ並べ、選択中を強調（名前なし）--- */
 .char-picker { display: flex; gap: 8px; }
@@ -480,7 +503,7 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
   .seat-cards { height: 42px; }
   .card.small { width: 26px; height: 38px; }
   .card.big { width: 42px; height: 59px; }
-  .seat-avatar { width: 38px; height: 38px; padding: 2px; margin-bottom: 2px; }
+  .seat-avatar { width: 48px; height: 48px; padding: 2px; margin-bottom: 3px; }
   /* トップバー：コード＋アイコン3つが収まるよう詰める */
   .topbar { gap: 4px; padding-left: var(--sp-2); padding-right: var(--sp-2); }
   .room-meta { gap: var(--sp-2); }

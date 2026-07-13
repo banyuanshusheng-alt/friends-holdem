@@ -348,36 +348,29 @@
       }
       seat.appendChild(cards);
 
-      // ポッド
-      const pod = el('div', 'seat-pod');
-      // キャラアバター
-      const av = el('div', 'seat-avatar');
+      // 大きめのアバターを主役に（名前は出さない：顔で「今こいつの番だ」が分かる）
+      const av = el('div', 'seat-avatar' + (p.id === state.youId ? ' you' : ''));
       av.style.setProperty('--char-color', charById(p.char).color);
-      const aimg = document.createElement('img'); aimg.src = charImg(p.char); aimg.alt = '';
+      const aimg = document.createElement('img'); aimg.src = charImg(p.char); aimg.alt = p.name; aimg.title = p.name;
       av.appendChild(aimg);
-      pod.appendChild(av);
-      const nameRow = el('div', 'seat-name');
-      if (gs && gs.isDealer) nameRow.appendChild(el('span', 'dealer-btn', 'D'));
-      nameRow.appendChild(document.createTextNode(p.name));
-      if (p.id === state.youId) nameRow.appendChild(el('span', 'you-badge', '(あなた)'));
-      pod.appendChild(nameRow);
+      if (gs && gs.isDealer) av.appendChild(el('span', 'dealer-badge', 'D'));
+      if (p.id === state.youId) av.appendChild(el('span', 'you-tag', 'あなた'));
+      seat.appendChild(av);
 
-      pod.appendChild(el('div', 'seat-chips', fmt(p.chips)));
-
-      // タグ（オールイン/退席/勝者/見学）
+      // チップと状態タグ
+      const info = el('div', 'seat-info');
+      info.appendChild(el('div', 'seat-chips', fmt(p.chips)));
       const resultPlayer = state.game && state.game.result
         ? state.game.result.players.find((rp) => rp.id === p.id) : null;
       const won = resultPlayer && resultPlayer.won > 0;
-      if (won) { seat.classList.add('winner'); pod.appendChild(el('span', 'seat-tag tag-win', `+${fmt(resultPlayer.won)}`)); }
-      else if (gs && gs.allIn) pod.appendChild(el('span', 'seat-tag tag-allin', 'ALL IN'));
-      else if (!gs && state.state !== 'lobby') pod.appendChild(el('span', 'seat-tag tag-off', p.sittingOut ? '見学' : (p.chips <= 0 ? 'チップ切れ' : '待機')));
-      if (!p.connected) pod.appendChild(el('span', 'seat-tag tag-out', 'オフライン'));
-
-      // ショーダウンの役名
+      if (won) { seat.classList.add('winner'); info.appendChild(el('span', 'seat-tag tag-win', `+${fmt(resultPlayer.won)}`)); }
+      else if (gs && gs.allIn) info.appendChild(el('span', 'seat-tag tag-allin', 'ALL IN'));
+      else if (!gs && state.state !== 'lobby') info.appendChild(el('span', 'seat-tag tag-off', p.sittingOut ? '見学' : (p.chips <= 0 ? 'チップ切れ' : '待機')));
+      if (!p.connected) info.appendChild(el('span', 'seat-tag tag-out', 'オフライン'));
       if (resultPlayer && resultPlayer.revealed && resultPlayer.hand) {
-        pod.appendChild(el('div', 'seat-hand', resultPlayer.hand.category));
+        info.appendChild(el('div', 'seat-hand', resultPlayer.hand.category));
       }
-      seat.appendChild(pod);
+      seat.appendChild(info);
 
       // ベット額チップ
       if (gs && gs.streetBet > 0) {
