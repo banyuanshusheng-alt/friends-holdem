@@ -227,6 +227,7 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 
 /* --- トーナメント脱落・決着 --- */
 .tag-place { background: rgba(232,199,102,.15); color: var(--gold); border: 1px solid rgba(232,199,102,.45); }
+.tag-ko { background: rgba(232,98,74,.2); color: #ff9a86; border: 1px solid rgba(232,98,74,.5); }
 .seat.eliminated { opacity: .5; filter: grayscale(.5); }
 .fr-crown { font-size: 2rem; line-height: 1; animation: winPop .5s cubic-bezier(.2,1.5,.4,1) both; }
 .fr-title { font-size: 1.2rem; font-weight: 800; color: var(--gold); }

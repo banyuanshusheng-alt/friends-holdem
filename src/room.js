@@ -19,6 +19,10 @@ export class Room {
     this.tourneyFieldIds = null; // 参加者ID（開始時に確定）
     this.tourneyPlaces = {};     // playerId -> 最終順位
     this.finalRanking = null;    // 決着時の順位配列
+    // バウンティ（KO報酬）
+    this.bounties = {};          // playerId -> 獲得バウンティ累計
+    this.koCounts = {};          // playerId -> KO数
+    this.lastKOs = [];           // 直近ハンドのKO（演出用）
     this.players = []; // { id, name, chips, connected, socketId, sittingOut }
     this.hostId = null;
     this.creatorId = null; // 部屋を作った人（再接続でホストを取り戻す）
@@ -254,7 +258,23 @@ export class Room {
     if (this.config.levelSeconds > 0 && this.tourneyFieldIds) this._processEliminations();
   }
 
+  bountyValue() { return Math.round(this.config.startingChips * 0.2); }
+
+  // 指定プレイヤーを飛ばした（＝そのチップを取った）人を特定
+  _findKOer(bustedId) {
+    if (!this.game || !this.game.result) return null;
+    const pots = this.game.result.pots || [];
+    let best = null;
+    for (const pot of pots) {
+      if (pot.eligible && pot.eligible.includes(bustedId) && !pot.winners.includes(bustedId)) {
+        if (!best || pot.amount > best.amount) best = pot;
+      }
+    }
+    return best && best.winners.length ? best.winners[0] : null;
+  }
+
   _processEliminations() {
+    this.lastKOs = [];
     const field = this.tourneyFieldIds;
     const fieldSize = field.length;
     // このハンド開始時のスタック（同時脱落の順位付けに使用）
@@ -270,6 +290,15 @@ export class Room {
     for (const p of newlyBusted) {
       this.tourneyPlaces[p.id] = fieldSize - placed; // 5人なら最初の脱落=5位
       placed++;
+      // バウンティ：この人を飛ばしたポットの勝者へ即時付与
+      const koerId = this._findKOer(p.id);
+      if (koerId) {
+        const amt = this.bountyValue();
+        this.bounties[koerId] = (this.bounties[koerId] || 0) + amt;
+        this.koCounts[koerId] = (this.koCounts[koerId] || 0) + 1;
+        const koer = this.getPlayer(koerId);
+        this.lastKOs.push({ koerId, koerName: koer ? koer.name : '?', bustedName: p.name, amount: amt });
+      }
     }
     // フィールドの生存者（チップ>0）が1人以下なら決着
     const alive = field.map((id) => this.getPlayer(id)).filter((p) => p && p.chips > 0);
@@ -284,7 +313,7 @@ export class Room {
     this.finalRanking = this.tourneyFieldIds
       .map((id) => {
         const p = this.getPlayer(id);
-        return { id, name: p ? p.name : '?', char: p ? p.char : 'haru', chips: p ? p.chips : 0, place: this.tourneyPlaces[id] || 99 };
+        return { id, name: p ? p.name : '?', char: p ? p.char : 'haru', chips: p ? p.chips : 0, place: this.tourneyPlaces[id] || 99, bounty: this.bounties[id] || 0, kos: this.koCounts[id] || 0 };
       })
       .sort((a, b) => a.place - b.place);
     this.touch();
@@ -295,6 +324,7 @@ export class Room {
     for (const p of this.players) { p.chips = this.config.startingChips; p.sittingOut = false; }
     this.level = 0; this.levelEndsAt = 0;
     this.tourneyFieldIds = null; this.tourneyPlaces = {}; this.finalRanking = null;
+    this.bounties = {}; this.koCounts = {}; this.lastKOs = [];
     this.game = null; this.dealerPlayerId = null; this.handNumber = 0;
     this.state = 'lobby';
     for (const p of this.players) this.statsBaseline[p.id] = p.chips;
@@ -354,6 +384,10 @@ export class Room {
       finished: this.state === 'finished',
       finalRanking: this.finalRanking,
       places: this.tourneyPlaces,
+      // バウンティ
+      bountyValue: this.config.levelSeconds > 0 ? this.bountyValue() : 0,
+      koCounts: this.koCounts,
+      lastKOs: this.lastKOs,
     };
   }
 }

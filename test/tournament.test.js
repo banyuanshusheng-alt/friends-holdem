@@ -66,5 +66,26 @@ console.log('=== 新トーナメントでリセット ===');
   ok(room.finalRanking === null && room.tourneyFieldIds === null, 'トーナメント状態クリア');
 }
 
+console.log('=== バウンティ（KO報酬）===');
+{
+  const room = new Room('B', { levelSeconds: 60, startingChips: 1000 });
+  ['a', 'b', 'c'].forEach((id) => room.addPlayer(id, id));
+  room.startHand();
+  ok(room.bountyValue() === 200, 'バウンティ額=開始チップの20%(200)');
+  // c を飛ばしたポットの勝者 a に付与
+  room.game = {
+    seats: [{ id: 'a', startChips: 1000 }, { id: 'b', startChips: 1000 }, { id: 'c', startChips: 1000 }],
+    result: { pots: [{ amount: 3000, winners: ['a'], eligible: ['a', 'b', 'c'] }] },
+  };
+  room.getPlayer('c').chips = 0; room.getPlayer('a').chips = 2000; room.getPlayer('b').chips = 1000;
+  room._processEliminations();
+  ok(room.tourneyPlaces['c'] === 3, 'c=3位');
+  ok(room.bounties['a'] === 200, 'a がバウンティ200を獲得');
+  ok(room.koCounts['a'] === 1, 'a のKO数=1');
+  ok(room.lastKOs.length === 1 && room.lastKOs[0].koerId === 'a' && room.lastKOs[0].bustedName === 'c', 'lastKOに a→c');
+  // b が敗者側でも c を飛ばしていないので付与されない
+  ok(!room.bounties['b'], 'b にはバウンティなし');
+}
+
 console.log(`\n結果: ${pass} pass / ${fail} fail`);
 process.exit(fail === 0 ? 0 : 1);

@@ -409,6 +409,8 @@
       else if (gs && gs.allIn) info.appendChild(el('span', 'seat-tag tag-allin', 'ALL IN'));
       else if (!gs && state.state !== 'lobby' && state.state !== 'finished') info.appendChild(el('span', 'seat-tag tag-off', p.sittingOut ? '見学' : (p.chips <= 0 ? 'チップ切れ' : '待機')));
       if (!p.connected) info.appendChild(el('span', 'seat-tag tag-out', 'オフライン'));
+      const kos = state.koCounts && state.koCounts[p.id];
+      if (kos > 0) info.appendChild(el('span', 'seat-tag tag-ko', `🎯${kos}`));
       if (resultPlayer && resultPlayer.revealed && resultPlayer.hand) {
         info.appendChild(el('div', 'seat-hand', resultPlayer.hand.category));
       }
@@ -487,7 +489,7 @@
             <span class="fr-place">${medal(x.place)}</span>
             <span class="fr-av" style="border-color:${charById(x.char).color}"><img src="${charImg(x.char)}" alt=""></span>
             <span class="fr-name">${esc(x.name)}${x.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : ''}</span>
-            <span class="fr-chips">${fmt(x.chips)}</span>
+            <span class="fr-chips">${x.kos > 0 ? `🎯${x.kos}` : ''}${x.bounty > 0 ? ` +${fmt(x.bounty)}` : (x.kos > 0 ? '' : '—')}</span>
           </div>`).join('')}
       </div>`;
   }

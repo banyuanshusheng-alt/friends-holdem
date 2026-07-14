@@ -388,6 +388,7 @@ export class Game {
       potResults.push({
         amount: pot.amount,
         winners: orderedWinners.map((w) => w.id),
+        eligible: pot.eligible, // バウンティのKO特定用
       });
     }
 
