@@ -4,7 +4,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { createRoom, getRoom, cleanupRooms, roomCount } from './src/rooms.js';
+import { createRoom, getRoom, cleanupRooms, roomCount, eachRoom } from './src/rooms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -173,6 +173,11 @@ io.on('connection', (socket) => {
 });
 
 setInterval(cleanupRooms, 1000 * 60 * 5);
+
+// ブラインド時計：1秒ごとにレベル上昇を判定し、上がった部屋だけ再配信
+setInterval(() => {
+  eachRoom((room) => { if (room.updateClock()) broadcastRoom(room); });
+}, 1000);
 
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {

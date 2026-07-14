@@ -159,6 +159,10 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 #room-code-text { font-weight: 800; letter-spacing: .18em; color: var(--gold); }
 .copy-hint { color: var(--faint); font-size: .85rem; }
 .hand-label { color: var(--muted); font-size: .85rem; }
+.blind-clock { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--muted); white-space: nowrap; }
+.blind-clock b { color: var(--gold); font-weight: 800; }
+.bc-time { color: var(--text); font-variant-numeric: tabular-nums; }
+.bc-warn { color: var(--red); font-weight: 800; }
 
 /* --- テーブル --- */
 .table-wrap { flex: 1; display: grid; place-items: center; padding: var(--sp-4) var(--sp-3); min-height: 0; }

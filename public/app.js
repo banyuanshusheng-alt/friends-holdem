@@ -183,6 +183,7 @@
       startingChips: Number($('#cfg-chips').value) || 1000,
       sb: Number($('#cfg-sb').value) || 10,
       bb: Number($('#cfg-bb').value) || 20,
+      levelSeconds: Number($('#cfg-level').value) || 0,
     };
     socket.emit('room:create', { playerId, name, config, char: selectedChar }, (res) => {
       if (!res.ok) return homeError(res.error);
@@ -266,6 +267,7 @@
     renderBoard();
     renderActionBar(you, isHost);
     renderLog();
+    updateBlindClock();
     handleEffects();
     if (!$('#stats-panel').hidden) renderStats();
   }
@@ -609,6 +611,21 @@
     const g = state.game;
     if (g && g.log && g.log.length) log.textContent = g.log[g.log.length - 1];
     else log.textContent = '';
+  }
+
+  // ================= ブラインド時計 =================
+  let clockInterval = null;
+  function updateBlindClock() {
+    const bc = $('#blind-clock');
+    const hl = $('#hand-label');
+    const active = state && state.levelSeconds > 0 && state.levelEndsAt;
+    if (!active) { bc.hidden = true; hl.hidden = false; return; }
+    hl.hidden = true; bc.hidden = false;
+    const remain = Math.max(0, Math.round((state.levelEndsAt - Date.now()) / 1000));
+    const mm = Math.floor(remain / 60), ss = String(remain % 60).padStart(2, '0');
+    const warn = remain <= 15 ? ' bc-warn' : '';
+    bc.innerHTML = `<b>Lv.${state.level + 1}</b> ${fmt(state.blinds.sb)}/${fmt(state.blinds.bb)} <span class="bc-time${warn}">⏱${mm}:${ss}</span>`;
+    if (!clockInterval) clockInterval = setInterval(updateBlindClock, 1000);
   }
 
   // ================= 成績パネル =================

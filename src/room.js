@@ -10,7 +10,11 @@ export class Room {
       startingChips: config.startingChips ?? 1000,
       sb: config.sb ?? 10,
       bb: config.bb ?? 20,
+      levelSeconds: Math.max(0, Math.floor(config.levelSeconds ?? 0)), // 0=固定ブラインド、>0=その秒数ごとに上昇
     };
+    // ブラインド時計
+    this.level = 0;
+    this.levelEndsAt = 0; // 0=未開始。最初のハンドで起動
     this.players = []; // { id, name, chips, connected, socketId, sittingOut }
     this.hostId = null;
     this.creatorId = null; // 部屋を作った人（再接続でホストを取り戻す）
@@ -28,6 +32,29 @@ export class Room {
   }
 
   touch() { this.lastActivity = Date.now(); }
+
+  // ブラインド上昇スケジュール（基準SB/BBに対する倍率）
+  _blindsForLevel(level) {
+    const MULT = [1, 1.5, 2, 3, 4, 6, 10, 14, 20, 30, 50, 80];
+    const m = MULT[Math.min(level, MULT.length - 1)];
+    return { sb: Math.max(1, Math.round(this.config.sb * m)), bb: Math.max(2, Math.round(this.config.bb * m)) };
+  }
+  currentBlinds() {
+    return this.config.levelSeconds > 0 ? this._blindsForLevel(this.level) : { sb: this.config.sb, bb: this.config.bb };
+  }
+  // サーバーの定期tickから呼ぶ。レベルが上がったら true を返す。
+  updateClock() {
+    if (this.config.levelSeconds <= 0 || this.levelEndsAt <= 0) return false;
+    let changed = false;
+    const now = Date.now();
+    while (now >= this.levelEndsAt) {
+      this.level += 1;
+      this.levelEndsAt += this.config.levelSeconds * 1000;
+      changed = true;
+    }
+    if (changed) this.touch();
+    return changed;
+  }
 
   getPlayer(id) { return this.players.find((p) => p.id === id); }
   activePlayers() { return this.players.filter((p) => p.connected); }
@@ -161,10 +188,15 @@ export class Room {
     const dealerId = this._nextDealerId(ordered);
     const dealerIndex = ordered.findIndex((p) => p.id === dealerId);
 
+    // トーナメント時は最初のハンドでブラインド時計を起動
+    if (this.config.levelSeconds > 0 && this.levelEndsAt === 0) {
+      this.levelEndsAt = Date.now() + this.config.levelSeconds * 1000;
+    }
+    const blinds = this.currentBlinds();
     this.game = new Game(
       ordered.map((p) => ({ id: p.id, name: p.name, chips: p.chips, _ref: p })),
       dealerIndex,
-      { sb: this.config.sb, bb: this.config.bb },
+      blinds,
     );
     // Game は players[i].chips を直接更新する。ordered の各要素は _ref を持つので同期する。
     this._syncBinding = this.game.seats.map((s) => s.player);
@@ -249,6 +281,11 @@ export class Room {
       standings: this.standings(),
       history: this.history,
       maxPlayers: MAX_PLAYERS,
+      // ブラインド時計
+      levelSeconds: this.config.levelSeconds,
+      level: this.level,
+      blinds: this.currentBlinds(),
+      levelEndsAt: this.levelEndsAt,
     };
   }
 }

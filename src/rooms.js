@@ -39,3 +39,5 @@ export function cleanupRooms() {
 }
 
 export function roomCount() { return rooms.size; }
+
+export function eachRoom(fn) { for (const room of rooms.values()) fn(room); }

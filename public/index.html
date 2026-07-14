@@ -82,6 +82,15 @@
               <input id="cfg-bb" type="number" value="20" min="2" />
             </div>
           </div>
+          <div class="field">
+            <label for="cfg-level">ブラインドUP（トーナメント）</label>
+            <select id="cfg-level">
+              <option value="0">なし（ブラインド固定）</option>
+              <option value="180">3分ごとに上昇（ターボ）</option>
+              <option value="300">5分ごとに上昇</option>
+              <option value="600">10分ごとに上昇（ゆっくり）</option>
+            </select>
+          </div>
           <button id="btn-create" class="btn btn-primary btn-block">部屋を作成</button>
         </div>
 
@@ -112,6 +121,7 @@
           <span class="copy-hint">⧉</span>
         </button>
         <span id="hand-label" class="hand-label"></span>
+        <span id="blind-clock" class="blind-clock" hidden></span>
       </div>
       <div class="topbar-actions">
         <button id="btn-sound" class="icon-btn" title="音のON/OFF">🔊</button>
