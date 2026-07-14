@@ -227,7 +227,8 @@
     localStorage.setItem('holdem_room', code);
     $('#room-code-text').textContent = code;
     showGame();
-    if (Sound.isEnabled()) Sound.startBGM();
+    // BGMは一旦停止（自動再生しない）。効果音は有効のまま。
+    Sound.stopBGM();
   }
 
   // 接続確立時：まず合い言葉ロックの要否を確認 → 認証後に部屋へ自動復帰
