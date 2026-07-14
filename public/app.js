@@ -79,53 +79,36 @@
     };
     function play(name) { if (!enabled) return; ensure(); if (!ctx) return; (sounds[name] || (() => {}))(); }
 
-    // ===== BGM（カジノラウンジ風アンビエント。合成＝音声ファイル不要）=====
-    let bgmTimer = null, bgmIndex = 0, bgmWanted = false;
-    // 各コード（低音のパッド）。マイナー系でしっとり。
-    const CHORDS = [
-      [110.00, 220.00, 261.63, 329.63], // Am
-      [ 87.31, 174.61, 220.00, 261.63], // F
-      [ 98.00, 196.00, 246.94, 293.66], // G
-      [ 65.41, 130.81, 164.81, 196.00], // C(低)
-    ];
-    function playChord(freqs, dur) {
-      if (!ctx) return;
-      const t0 = ctx.currentTime;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.05, t0 + 1.0);         // ゆっくり立ち上げ
-      g.gain.setValueAtTime(0.05, Math.max(t0 + 1.0, t0 + dur - 1.0));
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);        // ゆっくり消える
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
-      g.connect(lp).connect(ctx.destination);
-      freqs.forEach((f, i) => {
-        const o = ctx.createOscillator();
-        o.type = i === 0 ? 'sine' : 'triangle';
-        o.frequency.value = f;
-        o.detune.value = (Math.random() - 0.5) * 6; // わずかな揺らぎで温かみ
-        o.connect(g); o.start(t0); o.stop(t0 + dur + 0.2);
-      });
+    // ===== BGM（MP3ファイル /bgm.mp3 をループ再生）=====
+    let bgmAudio = null, bgmWanted = false;
+    function bgmEl() {
+      if (!bgmAudio) {
+        bgmAudio = new Audio('/bgm.mp3');
+        bgmAudio.loop = true;
+        bgmAudio.volume = 0.35;
+        bgmAudio.preload = 'auto';
+      }
+      return bgmAudio;
     }
-    function bgmTick() { playChord(CHORDS[bgmIndex % CHORDS.length], 4.2); bgmIndex++; }
-    function bgmRun() { // 条件が揃えばループ開始
-      if (bgmTimer || !enabled || !bgmWanted) return;
-      ensure(); if (!ctx) return;
-      bgmTick(); bgmTimer = setInterval(bgmTick, 4000);
+    function bgmRun() { // 条件が揃えば再生（ジェスチャ前は失敗しうる→次のタップで再試行）
+      if (!enabled || !bgmWanted) return;
+      bgmEl().play().catch(() => {});
     }
-    function bgmHalt() { if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; } }
+    function bgmHalt() { if (bgmAudio) bgmAudio.pause(); }
     function startBGM() { bgmWanted = true; bgmRun(); }  // 入室時
-    function stopBGM() { bgmWanted = false; bgmHalt(); } // 退出時
+    function stopBGM() { bgmWanted = false; bgmHalt(); if (bgmAudio) { try { bgmAudio.currentTime = 0; } catch (e) {} } } // 退出時
 
     function setEnabled(v) {
       enabled = v; localStorage.setItem('holdem_sound', v ? 'on' : 'off');
       if (v) { ensure(); bgmRun(); } else bgmHalt(); // ミュートは bgmWanted を保持
     }
     function isEnabled() { return enabled; }
-    return { play, setEnabled, isEnabled, ensure, startBGM, stopBGM };
+    return { play, setEnabled, isEnabled, ensure, startBGM, stopBGM, bgmRun };
   })();
-  // 最初のユーザー操作でオーディオを有効化（ブラウザ制約）
-  document.addEventListener('click', () => Sound.ensure(), { once: true });
-  document.addEventListener('touchstart', () => Sound.ensure(), { once: true });
+  // ユーザー操作のたびにオーディオ有効化＋BGM再生を試みる（ブラウザの自動再生制約対策）
+  function audioKick() { Sound.ensure(); Sound.bgmRun(); }
+  document.addEventListener('click', audioKick);
+  document.addEventListener('touchstart', audioKick);
 
   // ================= トースト =================
   let toastTimer;
@@ -227,8 +210,7 @@
     localStorage.setItem('holdem_room', code);
     $('#room-code-text').textContent = code;
     showGame();
-    // BGMは一旦停止（自動再生しない）。効果音は有効のまま。
-    Sound.stopBGM();
+    if (Sound.isEnabled()) Sound.startBGM();
   }
 
   // 接続確立時：まず合い言葉ロックの要否を確認 → 認証後に部屋へ自動復帰
