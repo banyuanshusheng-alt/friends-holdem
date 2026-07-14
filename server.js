@@ -127,6 +127,13 @@ io.on('connection', (socket) => {
     broadcastRoom(room);
   }));
 
+  socket.on('game:newtourney', (_data, cb) => withRoom(cb, (room, pid) => {
+    if (room.hostId !== pid) return cb?.({ ok: false, error: 'ホストのみ開始できます' });
+    const res = room.newTournament();
+    cb?.(res);
+    broadcastRoom(room);
+  }));
+
   socket.on('game:action', ({ action, amount }, cb) => withRoom(cb, (room, pid) => {
     const res = room.applyAction(pid, action, amount);
     cb?.(res);

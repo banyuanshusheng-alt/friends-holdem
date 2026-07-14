@@ -225,6 +225,21 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 .lc-need { color: var(--gold); font-weight: 700; }
 .lc-hint { font-size: .78rem; color: var(--muted); }
 
+/* --- トーナメント脱落・決着 --- */
+.tag-place { background: rgba(232,199,102,.15); color: var(--gold); border: 1px solid rgba(232,199,102,.45); }
+.seat.eliminated { opacity: .5; filter: grayscale(.5); }
+.fr-crown { font-size: 2rem; line-height: 1; animation: winPop .5s cubic-bezier(.2,1.5,.4,1) both; }
+.fr-title { font-size: 1.2rem; font-weight: 800; color: var(--gold); }
+.fr-list { display: flex; flex-direction: column; gap: 6px; width: min(330px, 80vw); margin-top: 6px; max-height: 42vh; overflow-y: auto; }
+.fr-row { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,.45); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+.fr-row.champ { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(232,199,102,.3); }
+.fr-place { min-width: 40px; text-align: center; font-weight: 800; font-size: .95rem; color: var(--muted); }
+.fr-row.champ .fr-place { color: var(--gold); }
+.fr-av { width: 30px; height: 30px; border-radius: 50%; overflow: hidden; border: 2px solid var(--gold); flex: none; }
+.fr-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fr-name { flex: 1; text-align: left; font-weight: 600; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-chips { color: var(--gold); font-weight: 700; font-size: .8rem; font-variant-numeric: tabular-nums; }
+
 /* --- カード --- */
 .card {
   width: 42px; height: 60px; border-radius: 7px;

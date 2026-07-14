@@ -38,6 +38,7 @@
   let prevToActId = null;
   let celebratedHand = -1;
   let firstEffect = true;
+  let finishCelebrated = false;
 
   // ================= サウンド（Web Audioで合成。音声ファイル不要） =================
   const Sound = (() => {
@@ -294,6 +295,14 @@
       celebratedHand = state.handNumber;
       celebrate(g.result);
     }
+    // トーナメント決着の演出（1回だけ）
+    if (state.finished && !finishCelebrated) {
+      finishCelebrated = true;
+      const champ = (state.finalRanking || []).find((x) => x.place === 1);
+      Sound.play(champ && champ.id === state.youId ? 'youwin' : 'win');
+    } else if (!state.finished) {
+      finishCelebrated = false;
+    }
   }
 
   function playForLog(line) {
@@ -391,9 +400,14 @@
       const resultPlayer = state.game && state.game.result
         ? state.game.result.players.find((rp) => rp.id === p.id) : null;
       const won = resultPlayer && resultPlayer.won > 0;
-      if (won) { seat.classList.add('winner'); info.appendChild(el('span', 'seat-tag tag-win', `+${fmt(resultPlayer.won)}`)); }
+      const place = state.places && state.places[p.id];
+      if (place && p.chips <= 0) {
+        // トーナメント脱落：順位バッジ
+        seat.classList.add('eliminated');
+        info.appendChild(el('span', 'seat-tag tag-place', place + '位'));
+      } else if (won) { seat.classList.add('winner'); info.appendChild(el('span', 'seat-tag tag-win', `+${fmt(resultPlayer.won)}`)); }
       else if (gs && gs.allIn) info.appendChild(el('span', 'seat-tag tag-allin', 'ALL IN'));
-      else if (!gs && state.state !== 'lobby') info.appendChild(el('span', 'seat-tag tag-off', p.sittingOut ? '見学' : (p.chips <= 0 ? 'チップ切れ' : '待機')));
+      else if (!gs && state.state !== 'lobby' && state.state !== 'finished') info.appendChild(el('span', 'seat-tag tag-off', p.sittingOut ? '見学' : (p.chips <= 0 ? 'チップ切れ' : '待機')));
       if (!p.connected) info.appendChild(el('span', 'seat-tag tag-out', 'オフライン'));
       if (resultPlayer && resultPlayer.revealed && resultPlayer.hand) {
         info.appendChild(el('div', 'seat-hand', resultPlayer.hand.category));
@@ -414,6 +428,12 @@
     const community = $('#community');
     const msg = $('#board-msg');
 
+    // トーナメント決着：最終順位を中央に表示
+    if (state.finished) {
+      lc.hidden = false; pot.hidden = true; community.hidden = true; msg.hidden = true;
+      renderFinalRanking();
+      return;
+    }
     // ロビー（開始前）は集合カードを中央に表示
     if (state.state === 'lobby') {
       lc.hidden = false; pot.hidden = true; community.hidden = true; msg.hidden = true;
@@ -453,6 +473,26 @@
     if (btn) btn.addEventListener('click', shareRoom);
   }
 
+  function renderFinalRanking() {
+    const lc = $('#lobby-center');
+    const r = state.finalRanking || [];
+    const champ = r.find((x) => x.place === 1);
+    const medal = (pl) => (pl === 1 ? '🥇' : pl === 2 ? '🥈' : pl === 3 ? '🥉' : pl + '位');
+    lc.innerHTML = `
+      <div class="fr-crown">🏆</div>
+      <div class="fr-title">${champ ? esc(champ.name) + ' 優勝！' : 'トーナメント終了'}</div>
+      <div class="fr-list">
+        ${r.map((x) => `
+          <div class="fr-row${x.place === 1 ? ' champ' : ''}">
+            <span class="fr-place">${medal(x.place)}</span>
+            <span class="fr-av" style="border-color:${charById(x.char).color}"><img src="${charImg(x.char)}" alt=""></span>
+            <span class="fr-name">${esc(x.name)}${x.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : ''}</span>
+            <span class="fr-chips">${fmt(x.chips)}</span>
+          </div>`).join('')}
+      </div>`;
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
   async function shareRoom() {
     const url = location.origin;
     const text = `🃏 ポーカーやろう！\nリンク: ${url}\nルームコード: ${state.code}\n（合い言葉も忘れずに伝えてね）`;
@@ -481,6 +521,20 @@
     const bar = $('#action-bar');
     bar.innerHTML = '';
     const g = state.game;
+
+    // --- トーナメント決着後 ---
+    if (state.finished) {
+      const wrap = el('div', 'lobby-bar');
+      if (isHost) {
+        const btn = el('button', 'btn btn-primary btn-block', '🏆 新しいトーナメント');
+        btn.addEventListener('click', () => socket.emit('game:newtourney', {}, (res) => { if (!res.ok) toast(res.error, true); }));
+        wrap.appendChild(btn);
+      } else {
+        wrap.appendChild(el('div', 'waiting-note', 'ホストが新しいトーナメントを始めるのを待っています…'));
+      }
+      bar.appendChild(wrap);
+      return;
+    }
 
     // --- ロビー / ハンド間 ---
     if (!g || state.state === 'lobby' || state.state === 'handover') {

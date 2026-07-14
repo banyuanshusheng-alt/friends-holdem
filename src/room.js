@@ -15,6 +15,10 @@ export class Room {
     // ブラインド時計
     this.level = 0;
     this.levelEndsAt = 0; // 0=未開始。最初のハンドで起動
+    // トーナメント（脱落・決着）
+    this.tourneyFieldIds = null; // 参加者ID（開始時に確定）
+    this.tourneyPlaces = {};     // playerId -> 最終順位
+    this.finalRanking = null;    // 決着時の順位配列
     this.players = []; // { id, name, chips, connected, socketId, sittingOut }
     this.hostId = null;
     this.creatorId = null; // 部屋を作った人（再接続でホストを取り戻す）
@@ -175,11 +179,18 @@ export class Room {
   }
 
   startHand() {
+    if (this.state === 'finished') {
+      return { ok: false, error: 'このトーナメントは終了しました。新しいトーナメントを始めてください' };
+    }
+    const isTour = this.config.levelSeconds > 0;
     // 途中参加者の着席を解除（今ハンドから参加可能に）
     for (const p of this.players) {
       if (p.connected && p.chips > 0) p.sittingOut = false;
     }
-    const participants = this.eligiblePlayers();
+    // 開始済みトーナメントはフィールドの生存者のみ（途中参加は次のトーナメントから）
+    const participants = (isTour && this.tourneyFieldIds)
+      ? this.players.filter((p) => this.tourneyFieldIds.includes(p.id) && p.chips > 0)
+      : this.eligiblePlayers();
     if (participants.length < 2) {
       return { ok: false, error: 'チップを持つ参加者が2人以上必要です' };
     }
@@ -188,9 +199,11 @@ export class Room {
     const dealerId = this._nextDealerId(ordered);
     const dealerIndex = ordered.findIndex((p) => p.id === dealerId);
 
-    // トーナメント時は最初のハンドでブラインド時計を起動
-    if (this.config.levelSeconds > 0 && this.levelEndsAt === 0) {
+    // トーナメント時は最初のハンドでブラインド時計を起動＆フィールド確定
+    if (isTour && this.levelEndsAt === 0) {
       this.levelEndsAt = Date.now() + this.config.levelSeconds * 1000;
+      this.tourneyFieldIds = participants.map((p) => p.id);
+      this.tourneyPlaces = {};
     }
     const blinds = this.currentBlinds();
     this.game = new Game(
@@ -237,6 +250,57 @@ export class Room {
     for (const p of this.players) stacks[p.id] = p.chips;
     this.history.push({ hand: this.handNumber, stacks });
     if (this.history.length > 500) this.history.shift();
+    // トーナメント：脱落判定・決着判定
+    if (this.config.levelSeconds > 0 && this.tourneyFieldIds) this._processEliminations();
+  }
+
+  _processEliminations() {
+    const field = this.tourneyFieldIds;
+    const fieldSize = field.length;
+    // このハンド開始時のスタック（同時脱落の順位付けに使用）
+    const seatStart = {};
+    for (const s of this.game.seats) seatStart[s.id] = s.startChips;
+    // 新たにチップが尽きた（未確定の）フィールドプレイヤー
+    const newlyBusted = field
+      .map((id) => this.getPlayer(id))
+      .filter((p) => p && p.chips <= 0 && !(p.id in this.tourneyPlaces) && (p.id in seatStart));
+    // ハンド開始時チップが少ない方を下位（先にplaceを埋める）
+    newlyBusted.sort((a, b) => (seatStart[a.id] || 0) - (seatStart[b.id] || 0));
+    let placed = Object.keys(this.tourneyPlaces).length;
+    for (const p of newlyBusted) {
+      this.tourneyPlaces[p.id] = fieldSize - placed; // 5人なら最初の脱落=5位
+      placed++;
+    }
+    // フィールドの生存者（チップ>0）が1人以下なら決着
+    const alive = field.map((id) => this.getPlayer(id)).filter((p) => p && p.chips > 0);
+    if (alive.length <= 1) {
+      if (alive.length === 1) this.tourneyPlaces[alive[0].id] = 1;
+      this._finishTournament();
+    }
+  }
+
+  _finishTournament() {
+    this.state = 'finished';
+    this.finalRanking = this.tourneyFieldIds
+      .map((id) => {
+        const p = this.getPlayer(id);
+        return { id, name: p ? p.name : '?', char: p ? p.char : 'haru', chips: p ? p.chips : 0, place: this.tourneyPlaces[id] || 99 };
+      })
+      .sort((a, b) => a.place - b.place);
+    this.touch();
+  }
+
+  // 新しいトーナメントを開始（チップ・レベル・順位をリセット）
+  newTournament() {
+    for (const p of this.players) { p.chips = this.config.startingChips; p.sittingOut = false; }
+    this.level = 0; this.levelEndsAt = 0;
+    this.tourneyFieldIds = null; this.tourneyPlaces = {}; this.finalRanking = null;
+    this.game = null; this.dealerPlayerId = null; this.handNumber = 0;
+    this.state = 'lobby';
+    for (const p of this.players) this.statsBaseline[p.id] = p.chips;
+    this.history = [{ hand: 0, stacks: Object.fromEntries(this.players.map((p) => [p.id, p.chips])) }];
+    this.touch();
+    return { ok: true };
   }
 
   // 成績（累計損益＝現在チップ − ベースライン）
@@ -286,6 +350,10 @@ export class Room {
       level: this.level,
       blinds: this.currentBlinds(),
       levelEndsAt: this.levelEndsAt,
+      // トーナメント脱落・決着
+      finished: this.state === 'finished',
+      finalRanking: this.finalRanking,
+      places: this.tourneyPlaces,
     };
   }
 }
