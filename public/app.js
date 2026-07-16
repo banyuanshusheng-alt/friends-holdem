@@ -40,6 +40,11 @@
   let firstEffect = true;
   let finishCelebrated = false;
 
+  // オールイン成立後のライブ演出（ボードを1枚ずつめくりながら勝率更新）
+  let runoutState = null;   // 演出中: { board:[card...], eq:{id:pct}|null }
+  let runoutHand = -1;      // 演出済みハンド番号
+  let runoutTimer = null;
+
   // ================= サウンド（Web Audioで合成。音声ファイル不要） =================
   const Sound = (() => {
     let ctx = null;
@@ -246,7 +251,52 @@
   });
 
   // ================= サーバー状態受信 =================
-  socket.on('room:state', (s) => { state = s; render(); });
+  socket.on('room:state', (s) => {
+    state = s;
+    maybeStartRunout();
+    render();
+  });
+
+  // handover に入り allinRunout があれば、ボードを段階的にめくる演出を開始
+  function maybeStartRunout() {
+    const g = state.game;
+    const runout = g && g.result && g.result.allinRunout;
+    // 演出対象でない状態に移ったら演出をリセット
+    if (state.state !== 'handover' || !runout) {
+      if (runoutState) { runoutState = null; clearTimeout(runoutTimer); }
+      return;
+    }
+    if (runoutHand === state.handNumber) return;   // このハンドは演出済み
+    if (firstEffect) return;                       // 入室/リロード直後は即結果表示
+    runoutHand = state.handNumber;
+    celebratedHand = state.handNumber;             // 通常演出は演出終了時に手動発火
+    startRunout(runout, g.result.community, g.result);
+  }
+
+  function startRunout(runout, fullBoard, result) {
+    clearTimeout(runoutTimer);
+    const steps = runout.steps || [];
+    let i = 0;
+    let prevLen = -1;
+    const tick = () => {
+      if (i >= steps.length) {
+        runoutState = null;               // 全札公開＝本来の結果表示に戻す
+        render();
+        const badBeat = maybeBadBeat(result);
+        if (!badBeat) celebrate(result);
+        if (state.lastKOs && state.lastKOs.length) showKOBanner(state.lastKOs);
+        return;
+      }
+      const step = steps[i];
+      runoutState = { board: fullBoard.slice(0, step.len), eq: step.eq };
+      if (step.len > prevLen && prevLen >= 0) Sound.play('deal'); // 新しい札が出た時だけ
+      prevLen = step.len;
+      render();
+      i++;
+      runoutTimer = setTimeout(tick, 1400);
+    };
+    tick();
+  }
 
   // ================= カード描画 =================
   function cardEl(card, size) {
@@ -444,9 +494,13 @@
       info.appendChild(el('div', 'seat-chips', fmt(p.chips)));
       const resultPlayer = state.game && state.game.result
         ? state.game.result.players.find((rp) => rp.id === p.id) : null;
+      const animating = !!runoutState; // 演出中は勝敗を伏せる
       const won = resultPlayer && resultPlayer.won > 0;
       const place = state.places && state.places[p.id];
-      if (place && p.chips <= 0) {
+      if (animating) {
+        // めくり演出中：オールイン札とライブ勝率だけ表示（勝者/順位は伏せる）
+        if (gs && gs.allIn) info.appendChild(el('span', 'seat-tag tag-allin', 'ALL IN'));
+      } else if (place && p.chips <= 0) {
         // トーナメント脱落：順位バッジ
         seat.classList.add('eliminated');
         info.appendChild(el('span', 'seat-tag tag-place', place + '位'));
@@ -455,13 +509,19 @@
       else if (!gs && state.state !== 'lobby' && state.state !== 'finished') info.appendChild(el('span', 'seat-tag tag-off', p.sittingOut ? '見学' : (p.chips <= 0 ? 'チップ切れ' : '待機')));
       if (!p.connected) info.appendChild(el('span', 'seat-tag tag-out', 'オフライン'));
       const kos = state.koCounts && state.koCounts[p.id];
-      if (kos > 0) info.appendChild(el('span', 'seat-tag tag-ko', `🎯${kos}`));
-      // オールイン時の勝率
-      const aeq = state.game && state.game.result && state.game.result.allinEquity;
-      if (aeq && aeq.eq && aeq.eq[p.id] != null && resultPlayer && !resultPlayer.folded) {
-        info.appendChild(el('span', 'seat-tag tag-eq', `🎲${aeq.eq[p.id]}%`));
+      if (!animating && kos > 0) info.appendChild(el('span', 'seat-tag tag-ko', `🎯${kos}`));
+      // オールイン時の勝率（演出中はライブ更新、それ以外はショーダウン結果値）
+      if (animating) {
+        if (runoutState.eq && runoutState.eq[p.id] != null && resultPlayer && !resultPlayer.folded) {
+          info.appendChild(el('span', 'seat-tag tag-eq', `🎲${runoutState.eq[p.id]}%`));
+        }
+      } else {
+        const aeq = state.game && state.game.result && state.game.result.allinEquity;
+        if (aeq && aeq.eq && aeq.eq[p.id] != null && resultPlayer && !resultPlayer.folded) {
+          info.appendChild(el('span', 'seat-tag tag-eq', `🎲${aeq.eq[p.id]}%`));
+        }
       }
-      if (resultPlayer && resultPlayer.revealed && resultPlayer.hand) {
+      if (!animating && resultPlayer && resultPlayer.revealed && resultPlayer.hand) {
         info.appendChild(el('div', 'seat-hand', resultPlayer.hand.category));
       }
       seat.appendChild(info);
@@ -496,12 +556,15 @@
 
     community.innerHTML = '';
     const g = state.game;
-    if (g && g.community) g.community.forEach((c) => community.appendChild(cardEl(c)));
+    // 演出中はめくり途中のボードを表示、それ以外は実際の場札
+    const board = runoutState ? runoutState.board : (g && g.community ? g.community : []);
+    board.forEach((c) => community.appendChild(cardEl(c)));
 
     if (g && g.totalPot > 0) pot.innerHTML = `POT <b>${fmt(g.totalPot)}</b>`;
     else pot.innerHTML = '';
 
-    if (!g) msg.textContent = '';
+    if (runoutState) msg.textContent = '🔥 オールイン勝負！';
+    else if (!g) msg.textContent = '';
     else if (g.result) msg.textContent = resultMessage(g.result);
     else msg.textContent = streetName(g.street);
   }

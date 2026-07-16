@@ -22,6 +22,7 @@ export class Game {
     this.messageLog = [];
     this.result = null; // ハンド終了時の結果サマリ
     this.allinEquity = null; // オールイン成立時の勝率（{ atStreet, eq:{id:%} }）
+    this.allinFromLen = null; // オールイン成立時のボード枚数（0/3/4）。演出用
 
     // 各席の状態
     this.seats = players.map((p) => ({
@@ -267,6 +268,7 @@ export class Game {
       if (!this.allinEquity && this._actableSeats().length <= 1 && this.community.length < 5) {
         const contenders = this.seats.filter((s) => !s.folded);
         if (contenders.length >= 2) {
+          this.allinFromLen = this.community.length; // 演出用：成立時のボード枚数
           this.allinEquity = {
             atStreet: this.street,
             eq: computeEquity(contenders.map((s) => ({ id: s.id, hole: s.hole })), this.community),
@@ -404,6 +406,17 @@ export class Game {
       });
     }
 
+    // オールイン成立後にボードをめくった＝ライブ演出用に各段階の勝率を算出
+    let allinRunout = null;
+    if (this.allinFromLen != null && this.allinFromLen < 5 && showdownNeeded && this.community.length === 5) {
+      const contenders = this.seats.filter((s) => !s.folded).map((s) => ({ id: s.id, hole: s.hole }));
+      if (contenders.length >= 2) {
+        const lens = [this.allinFromLen, ...[3, 4].filter((l) => l > this.allinFromLen)];
+        const steps = lens.map((len) => ({ len, eq: computeEquity(contenders, this.community.slice(0, len)) }));
+        allinRunout = { fromLen: this.allinFromLen, steps };
+      }
+    }
+
     // 結果サマリ
     this.street = 'complete';
     this.toAct = -1;
@@ -412,6 +425,7 @@ export class Game {
       community: this.community.slice(),
       pots: potResults,
       allinEquity: this.allinEquity, // オールイン時の勝率（あれば）
+      allinRunout, // ライブ演出用の各段階勝率（あれば）
       players: this.seats.map((s) => ({
         id: s.id,
         name: s.name,
