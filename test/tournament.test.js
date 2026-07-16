@@ -83,8 +83,10 @@ console.log('=== バウンティ（KO報酬）===');
   ok(room.bounties['a'] === 200, 'a がバウンティ200を獲得');
   ok(room.koCounts['a'] === 1, 'a のKO数=1');
   ok(room.lastKOs.length === 1 && room.lastKOs[0].koerId === 'a' && room.lastKOs[0].bustedName === 'c', 'lastKOに a→c');
+  ok(room.koMatrix['a'] && room.koMatrix['a']['c'] === 1, 'KO対戦表 a→c=1');
   // b が敗者側でも c を飛ばしていないので付与されない
   ok(!room.bounties['b'], 'b にはバウンティなし');
+  ok(!room.koMatrix['b'], 'b は対戦表に載らない');
 }
 
 console.log('=== デッドボタン（BBを1人ずつ・脱落時も二度払いなし）===');

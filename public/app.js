@@ -897,40 +897,117 @@
       wrap.appendChild(el('div', 'chart-empty', 'トーナメントが終わると、ここに通算成績（王者・賞金王・ハンター）が貯まります。'));
       return;
     }
-    // 3本立て切替タブ
+    // 切替タブ（3本立て＋対戦）
     const tabs = el('div', 'ss-boards');
     Object.entries(SEASON_BOARDS).forEach(([id, b]) => {
       const t = el('button', 'ss-board-tab' + (seasonBoard === id ? ' active' : ''), `${b.icon}${b.label}`);
       t.addEventListener('click', () => { seasonBoard = id; renderSeasonStandings(); });
       tabs.appendChild(t);
     });
+    const rt = el('button', 'ss-board-tab' + (seasonBoard === 'rivalry' ? ' active' : ''), '⚔️対戦');
+    rt.addEventListener('click', () => { seasonBoard = 'rivalry'; renderSeasonStandings(); });
+    tabs.appendChild(rt);
     wrap.appendChild(tabs);
 
-    const board = SEASON_BOARDS[seasonBoard] || SEASON_BOARDS.points;
-    const ranked = [...s].sort((a, b) => (b[board.key] - a[board.key]) || (b.points - a.points) || (b.wins - a.wins));
-    ranked.forEach((p, i) => {
-      const row = el('div', 'ss-row' + (i === 0 ? ' top' : ''));
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1);
-      row.appendChild(el('div', 'lb-rank', medal));
-      const av = el('span', 'ss-av'); av.style.borderColor = charById(p.char).color;
-      const img = document.createElement('img'); img.src = charImg(p.char); img.alt = ''; av.appendChild(img);
-      row.appendChild(av);
-      const info = el('div', 'ss-info');
-      info.appendChild(el('div', 'ss-name', esc(p.name) + (p.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : '')));
-      info.appendChild(el('div', 'ss-sub', `👑${fmt(p.points)}pt ・ 💰${fmt(p.bounty || 0)} ・ 🎯${p.kos} ・ 🏆${p.wins}回 ・ ${p.played}戦`));
-      row.appendChild(info);
-      const val = board.fmtVal(p[board.key] || 0);
-      row.appendChild(el('div', 'ss-pts', val + (board.unit ? `<span>${board.unit}</span>` : '')));
-      wrap.appendChild(row);
-    });
+    if (seasonBoard === 'rivalry') {
+      renderRivalry(wrap, s);
+    } else {
+      const board = SEASON_BOARDS[seasonBoard] || SEASON_BOARDS.points;
+      const ranked = [...s].sort((a, b) => (b[board.key] - a[board.key]) || (b.points - a.points) || (b.wins - a.wins));
+      ranked.forEach((p, i) => {
+        const row = el('div', 'ss-row' + (i === 0 ? ' top' : ''));
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1);
+        row.appendChild(el('div', 'lb-rank', medal));
+        const av = el('span', 'ss-av'); av.style.borderColor = charById(p.char).color;
+        const img = document.createElement('img'); img.src = charImg(p.char); img.alt = ''; av.appendChild(img);
+        row.appendChild(av);
+        const info = el('div', 'ss-info');
+        info.appendChild(el('div', 'ss-name', esc(p.name) + (p.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : '')));
+        info.appendChild(el('div', 'ss-sub', `👑${fmt(p.points)}pt ・ 💰${fmt(p.bounty || 0)} ・ 🎯${p.kos} ・ 🏆${p.wins}回 ・ ${p.played}戦`));
+        row.appendChild(info);
+        const val = board.fmtVal(p[board.key] || 0);
+        row.appendChild(el('div', 'ss-pts', val + (board.unit ? `<span>${board.unit}</span>` : '')));
+        wrap.appendChild(row);
+      });
+    }
     if (state.hostId === state.youId) {
       const b = el('button', 'btn btn-danger btn-block', '通算成績をリセット');
       b.style.marginTop = '14px';
       b.addEventListener('click', () => {
-        if (!confirm('通算成績（王者ポイント）をリセットしますか？')) return;
+        if (!confirm('通算成績（ポイント・賞金・対戦記録すべて）をリセットしますか？')) return;
         socket.emit('season:reset', {}, (r) => { if (r.ok) toast('通算成績をリセットしました'); else toast(r.error, true); });
       });
       wrap.appendChild(b);
+    }
+  }
+
+  // 対戦相手別戦績（KO対戦表から 天敵/カモ を割り出す）
+  function renderRivalry(wrap, standings) {
+    const mtx = state.koMatrix || {};
+    // id -> {name,char}（現メンバー優先、無ければ通算成績から）
+    const meta = {};
+    (state.players || []).forEach((p) => { meta[p.id] = { name: p.name, char: p.char }; });
+    standings.forEach((p) => { if (!meta[p.id]) meta[p.id] = { name: p.name, char: p.char }; });
+    const nameOf = (id) => (meta[id] ? meta[id].name : '?');
+    const charOf = (id) => (meta[id] ? meta[id].char : 'haru');
+
+    const anyKO = Object.values(mtx).some((row) => Object.keys(row || {}).length);
+    if (!anyKO) {
+      wrap.appendChild(el('div', 'chart-empty', 'まだKOがありません。トーナメントで誰かを飛ばすと、天敵・カモの記録が貯まります。'));
+      return;
+    }
+
+    const you = state.youId;
+    // あなたのカモ（あなたが最も飛ばした相手）
+    const myKOs = mtx[you] || {};
+    let preyId = null, preyN = 0;
+    for (const [bid, n] of Object.entries(myKOs)) if (n > preyN) { preyN = n; preyId = bid; }
+    // あなたの天敵（あなたを最も飛ばした相手）
+    let nemId = null, nemN = 0;
+    for (const [koer, row] of Object.entries(mtx)) {
+      const n = (row && row[you]) || 0;
+      if (n > nemN) { nemN = n; nemId = koer; }
+    }
+    const card = (cls, tag, id, n, verb) => {
+      const c = el('div', 'rv-card ' + cls);
+      if (id) {
+        c.innerHTML = `<div class="rv-tag">${tag}</div>
+          <div class="rv-face" style="border-color:${charById(charOf(id)).color}"><img src="${charImg(charOf(id))}" alt=""></div>
+          <div class="rv-name">${esc(nameOf(id))}</div>
+          <div class="rv-count">${verb} <b>${n}</b> 回</div>`;
+      } else {
+        c.innerHTML = `<div class="rv-tag">${tag}</div><div class="rv-none">まだいない</div>`;
+      }
+      return c;
+    };
+    const cards = el('div', 'rv-cards');
+    cards.appendChild(card('nemesis', '😱 天敵', nemId, nemN, '飛ばされた'));
+    cards.appendChild(card('prey', '🍖 カモ', preyId, preyN, '飛ばした'));
+    wrap.appendChild(cards);
+
+    // 全員のKO対戦表（行=飛ばした人／列=飛ばされた人）
+    const ids = Array.from(new Set([
+      ...Object.keys(mtx),
+      ...Object.values(mtx).flatMap((r) => Object.keys(r || {})),
+    ]));
+    if (ids.length) {
+      wrap.appendChild(el('div', 'rv-mtx-title', 'KO対戦表（横：飛ばした人 → 縦：飛ばされた人）'));
+      const table = el('table', 'rv-mtx');
+      const head = el('tr');
+      head.appendChild(el('th', 'rv-corner', '＼'));
+      ids.forEach((id) => head.appendChild(el('th', '', `<img src="${charImg(charOf(id))}" alt="${esc(nameOf(id))}" title="${esc(nameOf(id))}">`)));
+      table.appendChild(head);
+      ids.forEach((rowId) => {
+        const tr = el('tr');
+        tr.appendChild(el('th', 'rv-rowh', `<img src="${charImg(charOf(rowId))}" alt="${esc(nameOf(rowId))}" title="${esc(nameOf(rowId))}">`));
+        ids.forEach((colId) => {
+          const n = (mtx[rowId] && mtx[rowId][colId]) || 0;
+          const td = el('td', n > 0 ? 'hit' : (rowId === colId ? 'diag' : ''), rowId === colId ? '—' : (n || ''));
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      });
+      wrap.appendChild(table);
     }
   }
 

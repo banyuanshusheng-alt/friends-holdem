@@ -464,6 +464,26 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 .ss-boards { display: flex; gap: 6px; margin-bottom: var(--sp-2); }
 .ss-board-tab { flex: 1; padding: 8px 4px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); font-weight: 700; font-size: .82rem; cursor: pointer; transition: all .15s; }
 .ss-board-tab.active { border-color: var(--gold); color: var(--gold); background: rgba(232,199,102,.12); }
+/* 対戦相手別戦績（天敵・カモ） */
+.rv-cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.rv-card { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px 8px; text-align: center; }
+.rv-card.nemesis { border-color: rgba(224,90,90,.5); box-shadow: inset 0 0 0 1px rgba(224,90,90,.15); }
+.rv-card.prey { border-color: rgba(120,190,120,.5); box-shadow: inset 0 0 0 1px rgba(120,190,120,.15); }
+.rv-tag { font-weight: 800; font-size: .84rem; margin-bottom: 8px; }
+.rv-face { width: 54px; height: 54px; border-radius: 50%; overflow: hidden; border: 2px solid var(--gold); margin: 0 auto 6px; }
+.rv-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rv-name { font-weight: 700; font-size: .95rem; }
+.rv-count { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+.rv-count b { color: var(--fg); font-size: 1.05rem; }
+.rv-none { color: var(--muted); padding: 18px 0; font-size: .85rem; }
+.rv-mtx-title { color: var(--muted); font-size: .74rem; margin-bottom: 6px; }
+.rv-mtx { width: 100%; border-collapse: collapse; }
+.rv-mtx th, .rv-mtx td { border: 1px solid var(--line); text-align: center; padding: 3px; font-variant-numeric: tabular-nums; }
+.rv-mtx th img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; display: block; margin: 0 auto; }
+.rv-mtx td { font-weight: 700; color: var(--gold); }
+.rv-mtx td.hit { background: rgba(232,199,102,.14); }
+.rv-mtx td.diag { color: var(--line); }
+.rv-mtx .rv-corner { color: var(--muted); font-weight: 400; }
 .ss-row { display: grid; grid-template-columns: 28px 34px 1fr auto; align-items: center; gap: var(--sp-2); background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 12px; }
 .ss-row.top { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(232,199,102,.25); }
 .ss-row.top .lb-rank { color: var(--gold); }

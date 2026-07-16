@@ -25,6 +25,7 @@ export class Room {
     this.lastKOs = [];           // 直近ハンドのKO（演出用）
     // 通算成績（部屋内のトーナメントを跨いで累積）
     this.seasonStats = {};       // playerId -> { points, kos, wins, played, name, char }
+    this.koMatrix = {};          // koerId -> { bustedId: 撃破回数 }（天敵/カモ用・シーズン跨ぎで累積）
     this.players = []; // { id, name, chips, connected, socketId, sittingOut }
     this.hostId = null;
     this.creatorId = null; // 部屋を作った人（再接続でホストを取り戻す）
@@ -325,6 +326,9 @@ export class Room {
         this.koCounts[koerId] = (this.koCounts[koerId] || 0) + 1;
         const koer = this.getPlayer(koerId);
         this.lastKOs.push({ koerId, koerName: koer ? koer.name : '?', bustedName: p.name, amount: amt });
+        // 対戦表：koer が p を飛ばした回数を累積（天敵/カモ）
+        (this.koMatrix[koerId] || (this.koMatrix[koerId] = {}));
+        this.koMatrix[koerId][p.id] = (this.koMatrix[koerId][p.id] || 0) + 1;
       }
     }
     // フィールドの生存者（チップ>0）が1人以下なら決着
@@ -375,7 +379,7 @@ export class Room {
     }
   }
 
-  resetSeason() { this.seasonStats = {}; this.touch(); return { ok: true }; }
+  resetSeason() { this.seasonStats = {}; this.koMatrix = {}; this.touch(); return { ok: true }; }
 
   seasonStandings() {
     return Object.entries(this.seasonStats)
@@ -454,6 +458,7 @@ export class Room {
       lastKOs: this.lastKOs,
       // 通算成績
       seasonStandings: this.seasonStandings(),
+      koMatrix: this.koMatrix,
     };
   }
 }
