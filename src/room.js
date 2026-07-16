@@ -364,11 +364,12 @@ export class Room {
       const p = this.getPlayer(id);
       const place = this.tourneyPlaces[id] || N;
       const kos = this.koCounts[id] || 0;
-      const s = this.seasonStats[id] || { points: 0, kos: 0, wins: 0, played: 0, name: '', char: 'haru' };
+      const s = this.seasonStats[id] || { points: 0, kos: 0, wins: 0, played: 0, bounty: 0, name: '', char: 'haru' };
       s.points += this._placePoints(place, N) + kos * 10; // 順位pt + KOボーナス(1KO=10pt)
       s.kos += kos;
       s.wins += (place === 1 ? 1 : 0);
       s.played += 1;
+      s.bounty = (s.bounty || 0) + (this.bounties[id] || 0); // 累計バウンティ獲得額（賞金王指標）
       if (p) { s.name = p.name; s.char = p.char; }
       this.seasonStats[id] = s;
     }
@@ -378,7 +379,7 @@ export class Room {
 
   seasonStandings() {
     return Object.entries(this.seasonStats)
-      .map(([id, s]) => ({ id, name: s.name || '?', char: s.char || 'haru', points: s.points, kos: s.kos, wins: s.wins, played: s.played }))
+      .map(([id, s]) => ({ id, name: s.name || '?', char: s.char || 'haru', points: s.points, kos: s.kos, wins: s.wins, played: s.played, bounty: s.bounty || 0 }))
       .sort((a, b) => b.points - a.points || b.wins - a.wins || b.kos - a.kos);
   }
 

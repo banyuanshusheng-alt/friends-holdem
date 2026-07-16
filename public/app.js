@@ -40,6 +40,9 @@
   let firstEffect = true;
   let finishCelebrated = false;
 
+  // 通算タブの3本立てランキング切替（points=王者 / bounty=賞金王 / kos=ハンター）
+  let seasonBoard = 'points';
+
   // オールイン成立後のライブ演出（ボードを1枚ずつめくりながら勝率更新）
   let runoutState = null;   // 演出中: { board:[card...], eq:{id:pct}|null }
   let runoutHand = -1;      // 演出済みハンド番号
@@ -880,25 +883,44 @@
     if (!$('#tab-season').hidden) renderSeasonStandings();
   }
 
+  const SEASON_BOARDS = {
+    points: { icon: '👑', label: '王者', key: 'points', unit: 'pt', fmtVal: (v) => fmt(v) },
+    bounty: { icon: '💰', label: '賞金王', key: 'bounty', unit: '', fmtVal: (v) => fmt(v) },
+    kos: { icon: '🎯', label: 'ハンター', key: 'kos', unit: 'KO', fmtVal: (v) => String(v) },
+  };
+
   function renderSeasonStandings() {
     const wrap = $('#season-list');
     wrap.innerHTML = '';
     const s = state.seasonStandings || [];
     if (!s.length) {
-      wrap.appendChild(el('div', 'chart-empty', 'トーナメントが終わると、ここに通算成績（王者ポイント）が貯まります。'));
+      wrap.appendChild(el('div', 'chart-empty', 'トーナメントが終わると、ここに通算成績（王者・賞金王・ハンター）が貯まります。'));
       return;
     }
-    s.forEach((p, i) => {
+    // 3本立て切替タブ
+    const tabs = el('div', 'ss-boards');
+    Object.entries(SEASON_BOARDS).forEach(([id, b]) => {
+      const t = el('button', 'ss-board-tab' + (seasonBoard === id ? ' active' : ''), `${b.icon}${b.label}`);
+      t.addEventListener('click', () => { seasonBoard = id; renderSeasonStandings(); });
+      tabs.appendChild(t);
+    });
+    wrap.appendChild(tabs);
+
+    const board = SEASON_BOARDS[seasonBoard] || SEASON_BOARDS.points;
+    const ranked = [...s].sort((a, b) => (b[board.key] - a[board.key]) || (b.points - a.points) || (b.wins - a.wins));
+    ranked.forEach((p, i) => {
       const row = el('div', 'ss-row' + (i === 0 ? ' top' : ''));
-      row.appendChild(el('div', 'lb-rank', String(i + 1)));
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1);
+      row.appendChild(el('div', 'lb-rank', medal));
       const av = el('span', 'ss-av'); av.style.borderColor = charById(p.char).color;
       const img = document.createElement('img'); img.src = charImg(p.char); img.alt = ''; av.appendChild(img);
       row.appendChild(av);
       const info = el('div', 'ss-info');
       info.appendChild(el('div', 'ss-name', esc(p.name) + (p.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : '')));
-      info.appendChild(el('div', 'ss-sub', `🏆${p.wins}回 ・ 🎯${p.kos} ・ ${p.played}戦`));
+      info.appendChild(el('div', 'ss-sub', `👑${fmt(p.points)}pt ・ 💰${fmt(p.bounty || 0)} ・ 🎯${p.kos} ・ 🏆${p.wins}回 ・ ${p.played}戦`));
       row.appendChild(info);
-      row.appendChild(el('div', 'ss-pts', fmt(p.points) + '<span>pt</span>'));
+      const val = board.fmtVal(p[board.key] || 0);
+      row.appendChild(el('div', 'ss-pts', val + (board.unit ? `<span>${board.unit}</span>` : '')));
       wrap.appendChild(row);
     });
     if (state.hostId === state.youId) {
