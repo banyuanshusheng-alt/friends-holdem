@@ -31,6 +31,7 @@ export class Room {
     this.game = null;
     this.dealerIndex = -1; // 前ハンドのボタン位置（players 配列基準ではなく参加者順で管理）
     this.dealerPlayerId = null;
+    this.bbPlayerId = null; // 前ハンドのBBプレイヤー（デッドボタン：BBを1人ずつ進める）
     this.handNumber = 0;
     this.state = 'lobby'; // 'lobby' | 'playing' | 'handover'
     this.createdAt = Date.now();
@@ -172,7 +173,19 @@ export class Room {
     return { ok: true };
   }
 
-  // 席順（players 配列順）でボタンを回す
+  // players（席順）で prevPos の「次の」アクティブ参加者を、orderedIds 内のindexで返す
+  _nextActiveIndexAfter(prevPos, orderedIds) {
+    const total = this.players.length;
+    const start = prevPos < 0 ? 0 : prevPos;
+    for (let i = 1; i <= total; i++) {
+      const pid = this.players[(start + i) % total].id;
+      const idx = orderedIds.indexOf(pid);
+      if (idx !== -1) return idx;
+    }
+    return 0;
+  }
+
+  // 席順（players 配列順）でボタンを回す（旧ロジック・現在は未使用）
   _nextDealerId(participants) {
     if (this.dealerPlayerId === null) {
       return participants[0].id;
@@ -200,10 +213,22 @@ export class Room {
     if (participants.length < 2) {
       return { ok: false, error: 'チップを持つ参加者が2人以上必要です' };
     }
-    // players 配列の並びに沿って参加者を整列（席順を安定させる）
+    // 参加者を席順に整列
     const ordered = this.players.filter((p) => participants.some((x) => x.id === p.id));
-    const dealerId = this._nextDealerId(ordered);
-    const dealerIndex = ordered.findIndex((p) => p.id === dealerId);
+    const orderedIds = ordered.map((p) => p.id);
+    const n = orderedIds.length;
+    // デッドボタン：BBを毎ハンド「1人ずつ」進める（脱落時のBB二度払い/飛ばしを防ぐ）
+    let bbIdx;
+    if (this.bbPlayerId == null) {
+      bbIdx = n === 2 ? 1 : 2 % n; // 初回：先頭がボタン、席順2番目がBB
+    } else {
+      const prevPos = this.players.findIndex((p) => p.id === this.bbPlayerId);
+      bbIdx = this._nextActiveIndexAfter(prevPos, orderedIds);
+    }
+    this.bbPlayerId = orderedIds[bbIdx];
+    // ボタン位置：HUは非BBがボタン、3人以上はBBの2つ前がボタン
+    const dealerIndex = (n === 2) ? (bbIdx + 1) % 2 : (bbIdx - 2 + n) % n;
+    const dealerId = orderedIds[dealerIndex];
 
     // トーナメント時は最初のハンドでブラインド時計を起動＆フィールド確定
     if (isTour && this.levelEndsAt === 0) {
@@ -363,7 +388,7 @@ export class Room {
     this.level = 0; this.levelEndsAt = 0;
     this.tourneyFieldIds = null; this.tourneyPlaces = {}; this.finalRanking = null;
     this.bounties = {}; this.koCounts = {}; this.lastKOs = [];
-    this.game = null; this.dealerPlayerId = null; this.handNumber = 0;
+    this.game = null; this.dealerPlayerId = null; this.bbPlayerId = null; this.handNumber = 0;
     this.state = 'lobby';
     for (const p of this.players) this.statsBaseline[p.id] = p.chips;
     this.history = [{ hand: 0, stacks: Object.fromEntries(this.players.map((p) => [p.id, p.chips])) }];

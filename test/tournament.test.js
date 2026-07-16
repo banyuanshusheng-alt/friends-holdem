@@ -87,6 +87,26 @@ console.log('=== バウンティ（KO報酬）===');
   ok(!room.bounties['b'], 'b にはバウンティなし');
 }
 
+console.log('=== デッドボタン（BBを1人ずつ・脱落時も二度払いなし）===');
+{
+  const room = new Room('DB', { levelSeconds: 0, startingChips: 1000 });
+  ['a', 'b', 'c'].forEach((id) => room.addPlayer(id, id));
+  room.startHand(); ok(room.bbPlayerId === 'c', 'H1: BB=c');
+  room.startHand(); ok(room.bbPlayerId === 'a', 'H2: BB=a（1人進む）');
+  room.startHand(); ok(room.bbPlayerId === 'b', 'H3: BB=b');
+  // c が脱落 → 次のBBは a（b が2連続でBBを払わない）
+  room.getPlayer('c').chips = 0;
+  room.startHand();
+  ok(room.bbPlayerId !== 'b', '脱落後もBBは連続しない');
+  ok(room.bbPlayerId === 'a', 'H4: BB=a（cを飛ばして進む）');
+  // 4人→BBが一巡することを確認
+  const room2 = new Room('DB2', { levelSeconds: 0, startingChips: 1000 });
+  ['a', 'b', 'c', 'd'].forEach((id) => room2.addPlayer(id, id));
+  const seq = [];
+  for (let i = 0; i < 4; i++) { room2.startHand(); seq.push(room2.bbPlayerId); }
+  ok(new Set(seq).size === 4, '4人で4ハンド＝全員が1回ずつBB');
+}
+
 console.log('=== 通算成績（シーズンポイント）===');
 {
   const room = new Room('S', { levelSeconds: 60, startingChips: 1000 });
