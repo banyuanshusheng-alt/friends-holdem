@@ -133,5 +133,24 @@ console.log('=== 通算成績（シーズンポイント）===');
   ok(Object.keys(room.seasonStats).length === 0, 'リセットで空');
 }
 
+console.log('=== プレイスタイル（VPIP/PFR）===');
+{
+  const room = new Room('V', { startingChips: 1000, sb: 10, bb: 20 });
+  ['a', 'b', 'c'].forEach((id) => room.addPlayer(id, id));
+  room.startHand();
+  ok(room.playerStats['a'].hands === 1 && room.playerStats['b'].hands === 1 && room.playerStats['c'].hands === 1, '配札で全員hands=1');
+  // プリフロップ手番順：レイザー→コーラー→BBフォールド
+  const a1 = room.game.seats[room.game.toAct].id; room.applyAction(a1, 'raise', 40);
+  ok(room.playerStats[a1].vpip === 1 && room.playerStats[a1].pfr === 1, a1 + ': レイズでVPIP+PFR');
+  const a2 = room.game.seats[room.game.toAct].id; room.applyAction(a2, 'call');
+  ok(room.playerStats[a2].vpip === 1 && room.playerStats[a2].pfr === 0, a2 + ': コールはVPIPのみ');
+  const a3 = room.game.seats[room.game.toAct].id; room.applyAction(a3, 'fold');
+  ok(room.playerStats[a3].vpip === 0 && room.playerStats[a3].pfr === 0, a3 + ': BBフォールドは非計上');
+  const st = room.playStyles().find((x) => x.id === a1);
+  ok(st.vpip === 100 && st.pfr === 100, a1 + ': %換算(1/1=100%)');
+  room.resetSeason();
+  ok(Object.keys(room.playerStats).length === 0, 'リセットでスタイルも空');
+}
+
 console.log(`\n結果: ${pass} pass / ${fail} fail`);
 process.exit(fail === 0 ? 0 : 1);

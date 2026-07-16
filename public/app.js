@@ -907,10 +907,15 @@
     const rt = el('button', 'ss-board-tab' + (seasonBoard === 'rivalry' ? ' active' : ''), '⚔️対戦');
     rt.addEventListener('click', () => { seasonBoard = 'rivalry'; renderSeasonStandings(); });
     tabs.appendChild(rt);
+    const yt = el('button', 'ss-board-tab' + (seasonBoard === 'style' ? ' active' : ''), '📈スタイル');
+    yt.addEventListener('click', () => { seasonBoard = 'style'; renderSeasonStandings(); });
+    tabs.appendChild(yt);
     wrap.appendChild(tabs);
 
     if (seasonBoard === 'rivalry') {
       renderRivalry(wrap, s);
+    } else if (seasonBoard === 'style') {
+      renderPlayStyles(wrap);
     } else {
       const board = SEASON_BOARDS[seasonBoard] || SEASON_BOARDS.points;
       const ranked = [...s].sort((a, b) => (b[board.key] - a[board.key]) || (b.points - a.points) || (b.wins - a.wins));
@@ -1009,6 +1014,43 @@
       });
       wrap.appendChild(table);
     }
+  }
+
+  // プレイスタイル（VPIP/PFR%）。ルース/タイト・アグレ/パッシブを判定して表示。
+  function styleTag(vpip, pfr) {
+    const loose = vpip >= 40 ? 'ルース' : (vpip <= 22 ? 'タイト' : '標準');
+    const aggr = vpip > 0 && pfr / vpip >= 0.6 ? 'アグレ' : 'パッシブ';
+    if (vpip === 0) return { text: '鉄壁', cls: 'st-tight' };
+    return { text: `${loose}・${aggr}`, cls: loose === 'ルース' ? 'st-loose' : (loose === 'タイト' ? 'st-tight' : 'st-mid') };
+  }
+  function renderPlayStyles(wrap) {
+    const rows = state.playStyles || [];
+    if (!rows.length || rows.every((r) => !r.hands)) {
+      wrap.appendChild(el('div', 'chart-empty', 'ハンドを重ねると、各プレイヤーの傾向（VPIP＝参加率／PFR＝プリフロップレイズ率）が見えてきます。'));
+      return;
+    }
+    wrap.appendChild(el('div', 'rv-mtx-title', 'VPIP＝プリフロップ参加率／PFR＝プリフロップレイズ率（高いほど積極的）'));
+    rows.forEach((p) => {
+      const row = el('div', 'st-row');
+      const av = el('span', 'ss-av'); av.style.borderColor = charById(p.char).color;
+      const img = document.createElement('img'); img.src = charImg(p.char); img.alt = ''; av.appendChild(img);
+      row.appendChild(av);
+      const info = el('div', 'st-info');
+      const tag = styleTag(p.vpip, p.pfr);
+      info.appendChild(el('div', 'st-name', `${esc(p.name)}${p.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : ''} <span class="st-tag ${tag.cls}">${tag.text}</span>`));
+      const bar = (label, val, cls) => `
+        <div class="st-metric">
+          <span class="st-lbl">${label}</span>
+          <span class="st-track"><span class="st-fill ${cls}" style="width:${Math.min(100, val)}%"></span></span>
+          <span class="st-val">${val}%</span>
+        </div>`;
+      const bars = el('div', 'st-bars');
+      bars.innerHTML = bar('VPIP', p.vpip, 'vpip') + bar('PFR', p.pfr, 'pfr');
+      info.appendChild(bars);
+      info.appendChild(el('div', 'st-sub', `${p.hands}ハンド${p.hands < 15 ? '（サンプル少）' : ''}`));
+      row.appendChild(info);
+      wrap.appendChild(row);
+    });
   }
 
   function renderLeaderboard() {

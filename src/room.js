@@ -26,6 +26,9 @@ export class Room {
     // 通算成績（部屋内のトーナメントを跨いで累積）
     this.seasonStats = {};       // playerId -> { points, kos, wins, played, name, char }
     this.koMatrix = {};          // koerId -> { bustedId: 撃破回数 }（天敵/カモ用・シーズン跨ぎで累積）
+    this.playerStats = {};       // playerId -> { hands, vpip, pfr }（プレイスタイル・シーズン跨ぎで累積）
+    this._vpipMarked = new Set(); // このハンドでVPIP計上済みのplayerId
+    this._pfrMarked = new Set();  // このハンドでPFR計上済みのplayerId
     this.players = []; // { id, name, chips, connected, socketId, sittingOut }
     this.hostId = null;
     this.creatorId = null; // 部屋を作った人（再接続でホストを取り戻す）
@@ -246,6 +249,13 @@ export class Room {
     // Game は players[i].chips を直接更新する。ordered の各要素は _ref を持つので同期する。
     this._syncBinding = this.game.seats.map((s) => s.player);
     this.dealerPlayerId = dealerId;
+    // プレイスタイル集計：配られたハンド数を+1、このハンドの計上フラグをリセット
+    this._vpipMarked = new Set();
+    this._pfrMarked = new Set();
+    for (const s of this.game.seats) {
+      const st = this.playerStats[s.id] || (this.playerStats[s.id] = { hands: 0, vpip: 0, pfr: 0 });
+      st.hands += 1;
+    }
     this.handNumber += 1;
     this.state = 'playing';
     this.touch();
@@ -256,9 +266,25 @@ export class Room {
     if (!this.game || this.state !== 'playing') {
       return { ok: false, error: 'ハンドが進行していません' };
     }
+    // プレイスタイル判定用に、アクション適用「前」の状況を記録
+    const preStreet = this.game.street;
+    const preBet = this.game.currentBet;
     // Game 内 seat.player は { id, name, chips, _ref } のオブジェクト。
     const res = this.game.applyAction(playerId, action, amount);
     if (!res.ok) return res;
+    // VPIP/PFR：プリフロップの自発的アクションだけを計上（ブラインドは自動投入なので対象外）
+    if (preStreet === 'preflop') {
+      const st = this.playerStats[playerId] || (this.playerStats[playerId] = { hands: 0, vpip: 0, pfr: 0 });
+      if (['call', 'bet', 'raise', 'allin'].includes(action) && !this._vpipMarked.has(playerId)) {
+        this._vpipMarked.add(playerId); st.vpip += 1;
+      }
+      // PFR：レイズ、または現在額を上回るオールイン
+      const seat = this.game.seats.find((s) => s.id === playerId);
+      const raised = action === 'raise' || action === 'bet' || (action === 'allin' && seat && seat.streetBet > preBet);
+      if (raised && !this._pfrMarked.has(playerId)) {
+        this._pfrMarked.add(playerId); st.pfr += 1;
+      }
+    }
     // Game が更新したチップを本体プレイヤーへ反映
     this._flushChips();
     if (this.game.isComplete()) {
@@ -379,7 +405,17 @@ export class Room {
     }
   }
 
-  resetSeason() { this.seasonStats = {}; this.koMatrix = {}; this.touch(); return { ok: true }; }
+  resetSeason() { this.seasonStats = {}; this.koMatrix = {}; this.playerStats = {}; this.touch(); return { ok: true }; }
+
+  // プレイスタイル（VPIP/PFR%）。名前・キャラは現メンバーから補完。
+  playStyles() {
+    return Object.entries(this.playerStats).map(([id, s]) => {
+      const p = this.getPlayer(id);
+      const vpip = s.hands ? Math.round((s.vpip / s.hands) * 100) : 0;
+      const pfr = s.hands ? Math.round((s.pfr / s.hands) * 100) : 0;
+      return { id, name: p ? p.name : '?', char: p ? p.char : 'haru', hands: s.hands, vpip, pfr };
+    }).sort((a, b) => b.hands - a.hands);
+  }
 
   seasonStandings() {
     return Object.entries(this.seasonStats)
@@ -459,6 +495,7 @@ export class Room {
       // 通算成績
       seasonStandings: this.seasonStandings(),
       koMatrix: this.koMatrix,
+      playStyles: this.playStyles(),
     };
   }
 }
