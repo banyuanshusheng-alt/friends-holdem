@@ -128,6 +128,15 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
   border-radius: var(--r-md); padding: var(--sp-3); text-align: left;
 }
 .panel h2 { font-size: 1rem; margin-bottom: var(--sp-3); font-weight: 700; }
+.mode-picker { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.mode-opt { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; padding: 12px 8px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--bg-2); color: var(--fg); cursor: pointer; transition: all .15s; }
+.mode-opt.active { border-color: var(--gold); background: rgba(232,199,102,.1); box-shadow: inset 0 0 0 1px rgba(232,199,102,.3); }
+.mode-emoji { font-size: 1.4rem; }
+.mode-name { font-weight: 800; font-size: .92rem; }
+.mode-desc { color: var(--muted); font-size: .68rem; line-height: 1.3; }
+.lc-mode { display: inline-block; margin: 4px auto 0; padding: 3px 12px; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+.lc-mode.season { background: rgba(232,199,102,.16); color: var(--gold); }
+.lc-mode.quick { background: rgba(120,160,220,.16); color: #9cc0f0; }
 .config-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .divider { display: flex; align-items: center; gap: var(--sp-3); color: var(--faint); font-size: .8rem; }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }

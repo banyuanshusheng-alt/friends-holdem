@@ -11,6 +11,7 @@ export class Room {
       sb: config.sb ?? 10,
       bb: config.bb ?? 20,
       levelSeconds: Math.max(0, Math.floor(config.levelSeconds ?? 0)), // 0=固定ブラインド、>0=その秒数ごとに上昇
+      mode: config.mode === 'quick' ? 'quick' : 'season', // quick=記録を残さない気軽な対戦 / season=通算記録あり
     };
     // ブラインド時計
     this.level = 0;
@@ -147,6 +148,9 @@ export class Room {
       for (const p of this.players) { p.chips = v; this.statsBaseline[p.id] = v; }
       this.history = [{ hand: 0, stacks: Object.fromEntries(this.players.map((p) => [p.id, v])) }];
     }
+    if (config.mode !== undefined && this.handNumber === 0) {
+      this.config.mode = config.mode === 'quick' ? 'quick' : 'season';
+    }
     if (config.sb !== undefined) {
       const v = Math.floor(config.sb);
       if (v < 1) return { ok: false, error: 'SBは1以上で指定してください' };
@@ -249,12 +253,14 @@ export class Room {
     // Game は players[i].chips を直接更新する。ordered の各要素は _ref を持つので同期する。
     this._syncBinding = this.game.seats.map((s) => s.player);
     this.dealerPlayerId = dealerId;
-    // プレイスタイル集計：配られたハンド数を+1、このハンドの計上フラグをリセット
+    // プレイスタイル集計：配られたハンド数を+1、このハンドの計上フラグをリセット（記録ありモードのみ）
     this._vpipMarked = new Set();
     this._pfrMarked = new Set();
-    for (const s of this.game.seats) {
-      const st = this.playerStats[s.id] || (this.playerStats[s.id] = { hands: 0, vpip: 0, pfr: 0 });
-      st.hands += 1;
+    if (this.recordsOn) {
+      for (const s of this.game.seats) {
+        const st = this.playerStats[s.id] || (this.playerStats[s.id] = { hands: 0, vpip: 0, pfr: 0 });
+        st.hands += 1;
+      }
     }
     this.handNumber += 1;
     this.state = 'playing';
@@ -273,7 +279,7 @@ export class Room {
     const res = this.game.applyAction(playerId, action, amount);
     if (!res.ok) return res;
     // VPIP/PFR：プリフロップの自発的アクションだけを計上（ブラインドは自動投入なので対象外）
-    if (preStreet === 'preflop') {
+    if (preStreet === 'preflop' && this.recordsOn) {
       const st = this.playerStats[playerId] || (this.playerStats[playerId] = { hands: 0, vpip: 0, pfr: 0 });
       if (['call', 'bet', 'raise', 'allin'].includes(action) && !this._vpipMarked.has(playerId)) {
         this._vpipMarked.add(playerId); st.vpip += 1;
@@ -352,9 +358,11 @@ export class Room {
         this.koCounts[koerId] = (this.koCounts[koerId] || 0) + 1;
         const koer = this.getPlayer(koerId);
         this.lastKOs.push({ koerId, koerName: koer ? koer.name : '?', bustedName: p.name, amount: amt });
-        // 対戦表：koer が p を飛ばした回数を累積（天敵/カモ）
-        (this.koMatrix[koerId] || (this.koMatrix[koerId] = {}));
-        this.koMatrix[koerId][p.id] = (this.koMatrix[koerId][p.id] || 0) + 1;
+        // 対戦表：koer が p を飛ばした回数を累積（天敵/カモ・記録ありモードのみ）
+        if (this.recordsOn) {
+          (this.koMatrix[koerId] || (this.koMatrix[koerId] = {}));
+          this.koMatrix[koerId][p.id] = (this.koMatrix[koerId][p.id] || 0) + 1;
+        }
       }
     }
     // フィールドの生存者（チップ>0）が1人以下なら決着
@@ -373,9 +381,12 @@ export class Room {
         return { id, name: p ? p.name : '?', char: p ? p.char : 'haru', chips: p ? p.chips : 0, place: this.tourneyPlaces[id] || 99, bounty: this.bounties[id] || 0, kos: this.koCounts[id] || 0 };
       })
       .sort((a, b) => a.place - b.place);
-    this._awardSeason();
+    if (this.recordsOn) this._awardSeason(); // クイックマッチでは通算に加算しない
     this.touch();
   }
+
+  // 記録（通算成績・対戦表・プレイスタイル）を残すモードか
+  get recordsOn() { return this.config.mode !== 'quick'; }
 
   // 順位ポイント表（人数別）。表に無い人数は9人表で代用。
   _placePoints(place, N) {

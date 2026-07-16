@@ -152,5 +152,30 @@ console.log('=== プレイスタイル（VPIP/PFR）===');
   ok(Object.keys(room.playerStats).length === 0, 'リセットでスタイルも空');
 }
 
+console.log('=== モード分離（クイックマッチは記録を残さない）===');
+{
+  // クイック：通算・対戦表・スタイルが一切貯まらない
+  const q = new Room('Q', { levelSeconds: 60, startingChips: 1000, mode: 'quick' });
+  ['a', 'b', 'c'].forEach((id) => q.addPlayer(id, id));
+  q.startHand();
+  ok(q.recordsOn === false, 'quick: recordsOn=false');
+  ok(Object.keys(q.playerStats).length === 0, 'quick: 配札してもplayerStats空');
+  const a1 = q.game.seats[q.game.toAct].id; q.applyAction(a1, 'raise', 40);
+  ok(Object.keys(q.playerStats).length === 0, 'quick: アクションしてもVPIP計上なし');
+  // KO＆決着させても通算・対戦表は空
+  q.game = { seats: [{ id: 'a', startChips: 1000 }, { id: 'b', startChips: 1000 }, { id: 'c', startChips: 1000 }], result: { pots: [{ amount: 3000, winners: ['a'], eligible: ['a', 'b', 'c'] }] } };
+  q.getPlayer('c').chips = 0; q.getPlayer('b').chips = 0; q.getPlayer('a').chips = 3000;
+  q._processEliminations();
+  ok(q.state === 'finished', 'quick: 決着はする');
+  ok(Object.keys(q.seasonStats).length === 0, 'quick: 通算成績は空');
+  ok(Object.keys(q.koMatrix).length === 0, 'quick: 対戦表も空');
+  // シーズン：同じ流れで記録が残る
+  const s = new Room('S2', { levelSeconds: 60, startingChips: 1000, mode: 'season' });
+  ['a', 'b'].forEach((id) => s.addPlayer(id, id));
+  s.startHand();
+  ok(s.recordsOn === true, 'season: recordsOn=true');
+  ok(s.playerStats['a'].hands === 1, 'season: playerStatsが貯まる');
+}
+
 console.log(`\n結果: ${pass} pass / ${fail} fail`);
 process.exit(fail === 0 ? 0 : 1);

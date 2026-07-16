@@ -186,6 +186,18 @@
   }
   renderCharPicker();
 
+  // モード選択（シーズン戦／クイックマッチ）
+  let selectedMode = 'season';
+  const modePicker = $('#mode-picker');
+  if (modePicker) {
+    modePicker.querySelectorAll('.mode-opt').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        selectedMode = btn.dataset.mode;
+        modePicker.querySelectorAll('.mode-opt').forEach((b) => b.classList.toggle('active', b === btn));
+      });
+    });
+  }
+
   $('#btn-create').addEventListener('click', () => {
     const name = $('#name').value.trim();
     if (!name) return toast('名前を入力してください', true);
@@ -195,6 +207,7 @@
       sb: Number($('#cfg-sb').value) || 10,
       bb: Number($('#cfg-bb').value) || 20,
       levelSeconds: Number($('#cfg-level').value) || 0,
+      mode: selectedMode,
     };
     socket.emit('room:create', { playerId, name, config, char: selectedChar }, (res) => {
       if (!res.ok) return homeError(res.error);
@@ -577,8 +590,10 @@
     const count = state.players.length;
     const need = Math.max(0, 2 - count);
     const isHost = state.hostId === state.youId;
+    const quick = state.config && state.config.mode === 'quick';
     lc.innerHTML = `
       <div class="lc-badge">● メンバー集合中</div>
+      <div class="lc-mode ${quick ? 'quick' : 'season'}">${quick ? '⚡ クイックマッチ（記録なし）' : '🏆 シーズン戦（記録あり）'}</div>
       <button id="lc-code" class="lc-code" type="button">
         <span class="lc-code-label">ROOM CODE</span>
         <span class="lc-code-val">${state.code}</span>
@@ -892,6 +907,10 @@
   function renderSeasonStandings() {
     const wrap = $('#season-list');
     wrap.innerHTML = '';
+    if (state.config && state.config.mode === 'quick') {
+      wrap.appendChild(el('div', 'chart-empty', '⚡ クイックマッチでは通算成績・対戦記録・スタイルは残りません。記録を残すには「シーズン戦」で部屋を作成してください。'));
+      return;
+    }
     const s = state.seasonStandings || [];
     if (!s.length) {
       wrap.appendChild(el('div', 'chart-empty', 'トーナメントが終わると、ここに通算成績（王者・賞金王・ハンター）が貯まります。'));
