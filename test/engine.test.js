@@ -131,5 +131,19 @@ console.log('=== フルサイズのオールインは再レイズ権を復活さ
   assert(g.legalActions().actions.includes('raise'), 'A: フルオールインには再レイズできる');
 }
 
+console.log('=== オールイン時の勝率が計算される ===');
+{
+  const players = [{ id: 'A', name: 'A', chips: 1000 }, { id: 'B', name: 'B', chips: 1000 }];
+  const g = new Game(players, 0, { sb: 10, bb: 20 });
+  assert(g.currentSeat().id === 'A', 'HU: Aが先に行動');
+  assert(g.applyAction('A', 'allin').ok, 'A オールイン');
+  assert(g.applyAction('B', 'allin').ok, 'B オールイン（コール）');
+  assert(g.isComplete(), 'ハンド終了');
+  assert(g.result.allinEquity && g.result.allinEquity.eq, 'オールイン勝率が計算されている');
+  const eq = g.result.allinEquity.eq;
+  const sum = (eq.A || 0) + (eq.B || 0);
+  assert(sum >= 98 && sum <= 102, `勝率合計が約100 (${sum})`);
+}
+
 console.log(`\n結果: ${pass} pass / ${fail} fail`);
 process.exit(fail === 0 ? 0 : 1);

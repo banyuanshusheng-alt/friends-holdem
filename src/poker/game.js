@@ -2,6 +2,7 @@
 // チップの権威的な計算（ベット・ポット・サイドポット・配当）はすべてここで行う。
 import { freshDeck, shuffle } from './deck.js';
 import { evaluateBest, compareScores } from './handEvaluator.js';
+import { computeEquity } from './equity.js';
 
 export const STREETS = ['preflop', 'flop', 'turn', 'river', 'showdown', 'complete'];
 
@@ -20,6 +21,7 @@ export class Game {
     this.pots = []; // 確定したポット（表示用）。実配当は showdown で計算
     this.messageLog = [];
     this.result = null; // ハンド終了時の結果サマリ
+    this.allinEquity = null; // オールイン成立時の勝率（{ atStreet, eq:{id:%} }）
 
     // 各席の状態
     this.seats = players.map((p) => ({
@@ -261,6 +263,16 @@ export class Game {
       return;
     }
     if (this._bettingRoundComplete()) {
+      // オールインでこれ以上ベットできず、ボード未完 → 勝率を一度だけ算出（演出用）
+      if (!this.allinEquity && this._actableSeats().length <= 1 && this.community.length < 5) {
+        const contenders = this.seats.filter((s) => !s.folded);
+        if (contenders.length >= 2) {
+          this.allinEquity = {
+            atStreet: this.street,
+            eq: computeEquity(contenders.map((s) => ({ id: s.id, hole: s.hole })), this.community),
+          };
+        }
+      }
       this._nextStreet();
       return;
     }
@@ -399,6 +411,7 @@ export class Game {
       showdown: showdownNeeded && this.community.length === 5,
       community: this.community.slice(),
       pots: potResults,
+      allinEquity: this.allinEquity, // オールイン時の勝率（あれば）
       players: this.seats.map((s) => ({
         id: s.id,
         name: s.name,

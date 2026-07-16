@@ -428,6 +428,11 @@
       if (!p.connected) info.appendChild(el('span', 'seat-tag tag-out', 'オフライン'));
       const kos = state.koCounts && state.koCounts[p.id];
       if (kos > 0) info.appendChild(el('span', 'seat-tag tag-ko', `🎯${kos}`));
+      // オールイン時の勝率
+      const aeq = state.game && state.game.result && state.game.result.allinEquity;
+      if (aeq && aeq.eq && aeq.eq[p.id] != null && resultPlayer && !resultPlayer.folded) {
+        info.appendChild(el('span', 'seat-tag tag-eq', `🎲${aeq.eq[p.id]}%`));
+      }
       if (resultPlayer && resultPlayer.revealed && resultPlayer.hand) {
         info.appendChild(el('div', 'seat-hand', resultPlayer.hand.category));
       }
