@@ -77,6 +77,7 @@
       turn: () => { blip(880, 0, 0.12, { type: 'sine', vol: 0.14 }); blip(1320, 0.1, 0.13, { type: 'sine', vol: 0.11 }); },
       win: () => { [523, 659, 784, 1047].forEach((f, i) => blip(f, i * 0.09, 0.22, { type: 'triangle', vol: 0.16 })); },
       youwin: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => blip(f, i * 0.08, 0.26, { type: 'triangle', vol: 0.19 })); chip(0.22, 5); },
+      ko: () => { blip(150, 0, 0.22, { type: 'sawtooth', vol: 0.16, sweep: 60 }); [880, 1320].forEach((f, i) => blip(f, 0.12 + i * 0.08, 0.18, { type: 'triangle', vol: 0.14 })); chip(0.12, 4); },
     };
     function play(name) { if (!enabled) return; ensure(); if (!ctx) return; (sounds[name] || (() => {}))(); }
 
@@ -294,6 +295,7 @@
     if (state.state === 'handover' && g && g.result && celebratedHand !== state.handNumber) {
       celebratedHand = state.handNumber;
       celebrate(g.result);
+      if (state.lastKOs && state.lastKOs.length) showKOBanner(state.lastKOs);
     }
     // トーナメント決着の演出（1回だけ）
     if (state.finished && !finishCelebrated) {
@@ -338,6 +340,21 @@
     b.hidden = false;
     clearTimeout(winBannerTimer);
     winBannerTimer = setTimeout(() => { b.hidden = true; }, 3200);
+  }
+
+  let koBannerTimer;
+  function showKOBanner(kos) {
+    Sound.play('ko');
+    const youKO = kos.some((k) => k.koerId === state.youId);
+    const b = $('#ko-banner');
+    b.className = 'ko-banner' + (youKO ? ' you' : '');
+    b.innerHTML = `<div class="kb-inner">
+      <div class="kb-title">🎯 KO!</div>
+      ${kos.map((k) => `<div class="kb-line"><b>${esc(k.koerName)}</b> が <b>${esc(k.bustedName)}</b> を撃破 <span class="kb-amt">+${fmt(k.amount)}</span></div>`).join('')}
+    </div>`;
+    b.hidden = false;
+    clearTimeout(koBannerTimer);
+    koBannerTimer = setTimeout(() => { b.hidden = true; }, 3000);
   }
 
   // 席配置：相手は上側の弧に、自分は常に下中央に固定

@@ -500,6 +500,25 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 .wb-hand { color: var(--muted); font-size: .82rem; margin-top: 2px; }
 @keyframes winPop { from { opacity: 0; transform: translateX(-50%) translateY(-16px) scale(.92); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
 
+/* ===================== KOバナー（バウンティ演出） ===================== */
+.ko-banner {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 63; pointer-events: none; text-align: center; width: max-content; max-width: 92vw;
+  animation: koPop .4s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+.ko-banner .kb-inner {
+  background: linear-gradient(180deg, #3a1e1a, #17100e);
+  border: 2px solid var(--red); border-radius: 16px; padding: 16px 28px;
+  box-shadow: 0 0 0 1px rgba(232,98,74,.4), 0 20px 50px rgba(0,0,0,.7), 0 0 44px rgba(232,98,74,.4);
+}
+.ko-banner.you .kb-inner { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(232,199,102,.5), 0 20px 50px rgba(0,0,0,.7), 0 0 60px rgba(232,199,102,.5); }
+.kb-title { font-size: 1.9rem; font-weight: 800; color: var(--red); letter-spacing: .06em; }
+.ko-banner.you .kb-title { color: var(--gold); }
+.kb-line { color: var(--text); font-size: .9rem; margin-top: 4px; }
+.kb-line b { color: #fff; }
+.kb-amt { color: var(--green); font-weight: 800; font-variant-numeric: tabular-nums; }
+@keyframes koPop { from { opacity: 0; transform: translate(-50%, -50%) scale(.5) rotate(-4deg); } to { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); } }
+
 /* ===================== 遊び方パネル ===================== */
 .rules h3 { font-size: 1rem; margin: 4px 0 12px; color: var(--gold); }
 .rule-steps { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 22px; counter-reset: step; }
