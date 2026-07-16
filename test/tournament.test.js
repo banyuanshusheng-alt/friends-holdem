@@ -87,5 +87,25 @@ console.log('=== バウンティ（KO報酬）===');
   ok(!room.bounties['b'], 'b にはバウンティなし');
 }
 
+console.log('=== 通算成績（シーズンポイント）===');
+{
+  const room = new Room('S', { levelSeconds: 60, startingChips: 1000 });
+  ['a', 'b', 'c'].forEach((id) => room.addPlayer(id, id));
+  room.startHand();
+  room.tourneyPlaces = { a: 1, b: 2, c: 3 };
+  room.koCounts = { a: 2 };
+  room._awardSeason();
+  // 3人表: 1位100/2位50/3位20 + KO10pt。a=100+20=120
+  ok(room.seasonStats['a'].points === 120, 'a=120pt(100+2KO)');
+  ok(room.seasonStats['a'].wins === 1 && room.seasonStats['a'].kos === 2, 'a: wins1 kos2');
+  ok(room.seasonStats['b'].points === 50, 'b=50pt');
+  ok(room.seasonStats['c'].points === 20, 'c=20pt');
+  room._awardSeason(); // 2戦目も累積
+  ok(room.seasonStats['a'].points === 240 && room.seasonStats['a'].played === 2, '累積(240pt,2戦)');
+  ok(room.seasonStandings()[0].id === 'a', '通算1位=a');
+  room.resetSeason();
+  ok(Object.keys(room.seasonStats).length === 0, 'リセットで空');
+}
+
 console.log(`\n結果: ${pass} pass / ${fail} fail`);
 process.exit(fail === 0 ? 0 : 1);

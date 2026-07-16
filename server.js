@@ -140,6 +140,13 @@ io.on('connection', (socket) => {
     broadcastRoom(room);
   }));
 
+  socket.on('season:reset', (_data, cb) => withRoom(cb, (room, pid) => {
+    if (room.hostId !== pid) return cb?.({ ok: false, error: 'ホストのみリセットできます' });
+    room.resetSeason();
+    cb?.({ ok: true });
+    broadcastRoom(room);
+  }));
+
   socket.on('stats:reset', (_data, cb) => withRoom(cb, (room, pid) => {
     if (room.hostId !== pid) return cb?.({ ok: false, error: 'ホストのみリセットできます' });
     room.resetStats();

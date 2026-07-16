@@ -710,8 +710,10 @@
       tab.classList.add('active');
       const which = tab.dataset.tab;
       $('#tab-board').hidden = which !== 'board';
+      $('#tab-season').hidden = which !== 'season';
       $('#tab-graph').hidden = which !== 'graph';
       if (which === 'graph') renderChart();
+      if (which === 'season') renderSeasonStandings();
     });
   });
 
@@ -779,6 +781,39 @@
   function renderStats() {
     renderLeaderboard();
     if (!$('#tab-graph').hidden) renderChart();
+    if (!$('#tab-season').hidden) renderSeasonStandings();
+  }
+
+  function renderSeasonStandings() {
+    const wrap = $('#season-list');
+    wrap.innerHTML = '';
+    const s = state.seasonStandings || [];
+    if (!s.length) {
+      wrap.appendChild(el('div', 'chart-empty', 'トーナメントが終わると、ここに通算成績（王者ポイント）が貯まります。'));
+      return;
+    }
+    s.forEach((p, i) => {
+      const row = el('div', 'ss-row' + (i === 0 ? ' top' : ''));
+      row.appendChild(el('div', 'lb-rank', String(i + 1)));
+      const av = el('span', 'ss-av'); av.style.borderColor = charById(p.char).color;
+      const img = document.createElement('img'); img.src = charImg(p.char); img.alt = ''; av.appendChild(img);
+      row.appendChild(av);
+      const info = el('div', 'ss-info');
+      info.appendChild(el('div', 'ss-name', esc(p.name) + (p.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : '')));
+      info.appendChild(el('div', 'ss-sub', `🏆${p.wins}回 ・ 🎯${p.kos} ・ ${p.played}戦`));
+      row.appendChild(info);
+      row.appendChild(el('div', 'ss-pts', fmt(p.points) + '<span>pt</span>'));
+      wrap.appendChild(row);
+    });
+    if (state.hostId === state.youId) {
+      const b = el('button', 'btn btn-danger btn-block', '通算成績をリセット');
+      b.style.marginTop = '14px';
+      b.addEventListener('click', () => {
+        if (!confirm('通算成績（王者ポイント）をリセットしますか？')) return;
+        socket.emit('season:reset', {}, (r) => { if (r.ok) toast('通算成績をリセットしました'); else toast(r.error, true); });
+      });
+      wrap.appendChild(b);
+    }
   }
 
   function renderLeaderboard() {

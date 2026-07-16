@@ -23,6 +23,8 @@ export class Room {
     this.bounties = {};          // playerId -> 獲得バウンティ累計
     this.koCounts = {};          // playerId -> KO数
     this.lastKOs = [];           // 直近ハンドのKO（演出用）
+    // 通算成績（部屋内のトーナメントを跨いで累積）
+    this.seasonStats = {};       // playerId -> { points, kos, wins, played, name, char }
     this.players = []; // { id, name, chips, connected, socketId, sittingOut }
     this.hostId = null;
     this.creatorId = null; // 部屋を作った人（再接続でホストを取り戻す）
@@ -316,7 +318,43 @@ export class Room {
         return { id, name: p ? p.name : '?', char: p ? p.char : 'haru', chips: p ? p.chips : 0, place: this.tourneyPlaces[id] || 99, bounty: this.bounties[id] || 0, kos: this.koCounts[id] || 0 };
       })
       .sort((a, b) => a.place - b.place);
+    this._awardSeason();
     this.touch();
+  }
+
+  // 順位ポイント表（人数別）。表に無い人数は9人表で代用。
+  _placePoints(place, N) {
+    const T = {
+      2: [100, 40], 3: [100, 50, 20], 4: [100, 55, 30, 15], 5: [100, 60, 35, 20, 10],
+      6: [100, 65, 45, 30, 18, 8], 7: [100, 68, 48, 33, 22, 12, 6],
+      8: [100, 70, 52, 37, 26, 16, 9, 5], 9: [100, 72, 55, 40, 29, 20, 13, 8, 4],
+    };
+    const t = T[N] || T[9];
+    return t[place - 1] != null ? t[place - 1] : 3;
+  }
+
+  _awardSeason() {
+    const N = this.tourneyFieldIds.length;
+    for (const id of this.tourneyFieldIds) {
+      const p = this.getPlayer(id);
+      const place = this.tourneyPlaces[id] || N;
+      const kos = this.koCounts[id] || 0;
+      const s = this.seasonStats[id] || { points: 0, kos: 0, wins: 0, played: 0, name: '', char: 'haru' };
+      s.points += this._placePoints(place, N) + kos * 10; // 順位pt + KOボーナス(1KO=10pt)
+      s.kos += kos;
+      s.wins += (place === 1 ? 1 : 0);
+      s.played += 1;
+      if (p) { s.name = p.name; s.char = p.char; }
+      this.seasonStats[id] = s;
+    }
+  }
+
+  resetSeason() { this.seasonStats = {}; this.touch(); return { ok: true }; }
+
+  seasonStandings() {
+    return Object.entries(this.seasonStats)
+      .map(([id, s]) => ({ id, name: s.name || '?', char: s.char || 'haru', points: s.points, kos: s.kos, wins: s.wins, played: s.played }))
+      .sort((a, b) => b.points - a.points || b.wins - a.wins || b.kos - a.kos);
   }
 
   // 新しいトーナメントを開始（チップ・レベル・順位をリセット）
@@ -388,6 +426,8 @@ export class Room {
       bountyValue: this.config.levelSeconds > 0 ? this.bountyValue() : 0,
       koCounts: this.koCounts,
       lastKOs: this.lastKOs,
+      // 通算成績
+      seasonStandings: this.seasonStandings(),
     };
   }
 }

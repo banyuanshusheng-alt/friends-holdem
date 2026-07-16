@@ -458,6 +458,19 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 .net-neg { color: var(--red); }
 .net-zero { color: var(--muted); }
 
+/* 通算成績 */
+.season-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ss-row { display: grid; grid-template-columns: 28px 34px 1fr auto; align-items: center; gap: var(--sp-2); background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 12px; }
+.ss-row.top { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(232,199,102,.25); }
+.ss-row.top .lb-rank { color: var(--gold); }
+.ss-av { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; border: 2px solid var(--gold); }
+.ss-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ss-info { min-width: 0; }
+.ss-name { font-weight: 600; font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-sub { color: var(--muted); font-size: .74rem; }
+.ss-pts { color: var(--gold); font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.ss-pts span { font-size: .7rem; color: var(--muted); font-weight: 600; margin-left: 1px; }
+
 .chart { width: 100%; }
 .chart svg { width: 100%; height: auto; display: block; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
