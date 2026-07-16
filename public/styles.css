@@ -533,6 +533,30 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 .kb-amt { color: var(--green); font-weight: 800; font-variant-numeric: tabular-nums; }
 @keyframes koPop { from { opacity: 0; transform: translate(-50%, -50%) scale(.5) rotate(-4deg); } to { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); } }
 
+/* ===================== バッドビートバナー ===================== */
+.badbeat-banner {
+  position: fixed; left: 50%; top: 30%; transform: translate(-50%, -50%);
+  z-index: 64; pointer-events: none; text-align: center; width: max-content; max-width: 92vw;
+  animation: bbShake .5s ease both;
+}
+.badbeat-banner .bb2-inner {
+  background: linear-gradient(180deg, #241033, #140a1c);
+  border: 2px solid #b57edc; border-radius: 16px; padding: 15px 26px;
+  box-shadow: 0 0 0 1px rgba(181,126,220,.4), 0 20px 50px rgba(0,0,0,.7), 0 0 44px rgba(181,126,220,.4);
+}
+.bb2-title { font-size: 1.7rem; font-weight: 800; color: #c99bec; letter-spacing: .08em; }
+.bb2-line { color: var(--text); font-size: .9rem; margin-top: 4px; }
+.bb2-line b { color: #fff; }
+.bb2-pct { color: var(--red) !important; }
+@keyframes bbShake {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.6); }
+  40% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+  55% { transform: translate(-52%, -50%) scale(1); }
+  70% { transform: translate(-48%, -50%) scale(1); }
+  85% { transform: translate(-51%, -50%) scale(1); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
 /* ===================== 遊び方パネル ===================== */
 .rules h3 { font-size: 1rem; margin: 4px 0 12px; color: var(--gold); }
 .rule-steps { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 22px; counter-reset: step; }

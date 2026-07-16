@@ -78,6 +78,7 @@
       win: () => { [523, 659, 784, 1047].forEach((f, i) => blip(f, i * 0.09, 0.22, { type: 'triangle', vol: 0.16 })); },
       youwin: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => blip(f, i * 0.08, 0.26, { type: 'triangle', vol: 0.19 })); chip(0.22, 5); },
       ko: () => { blip(150, 0, 0.22, { type: 'sawtooth', vol: 0.16, sweep: 60 }); [880, 1320].forEach((f, i) => blip(f, 0.12 + i * 0.08, 0.18, { type: 'triangle', vol: 0.14 })); chip(0.12, 4); },
+      badbeat: () => { [415, 349, 294, 233].forEach((f, i) => blip(f, i * 0.19, 0.26, { type: 'sawtooth', vol: 0.13, sweep: f * 0.9 })); }, // 下降＝がっかり音
     };
     function play(name) { if (!enabled) return; ensure(); if (!ctx) return; (sounds[name] || (() => {}))(); }
 
@@ -294,7 +295,8 @@
     // 3) 勝敗演出（handover に入って結果が出た初回のみ）
     if (state.state === 'handover' && g && g.result && celebratedHand !== state.handNumber) {
       celebratedHand = state.handNumber;
-      celebrate(g.result);
+      const badBeat = maybeBadBeat(g.result);
+      if (!badBeat) celebrate(g.result); // 通常の勝利バナーはバッドビートが無い時のみ
       if (state.lastKOs && state.lastKOs.length) showKOBanner(state.lastKOs);
     }
     // トーナメント決着の演出（1回だけ）
@@ -355,6 +357,32 @@
     b.hidden = false;
     clearTimeout(koBannerTimer);
     koBannerTimer = setTimeout(() => { b.hidden = true; }, 3000);
+  }
+
+  // オールインで高勝率だったのに負けた＝バッドビート
+  function maybeBadBeat(result) {
+    const aeq = result.allinEquity;
+    if (!aeq || !aeq.eq) return false;
+    const entries = Object.entries(aeq.eq).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return false;
+    const [favId, favPct] = entries[0];
+    const favP = result.players.find((p) => p.id === favId);
+    const favWon = favP && favP.won > 0;
+    if (favPct >= 75 && favP && !favWon) { showBadBeat(favP.name, favPct); return true; }
+    return false;
+  }
+
+  let badBeatTimer;
+  function showBadBeat(name, pct) {
+    Sound.play('badbeat');
+    const b = $('#badbeat-banner');
+    b.innerHTML = `<div class="bb2-inner">
+      <div class="bb2-title">😱 BAD BEAT</div>
+      <div class="bb2-line"><b>${esc(name)}</b> が <b class="bb2-pct">${pct}%</b> から敗北…</div>
+    </div>`;
+    b.hidden = false;
+    clearTimeout(badBeatTimer);
+    badBeatTimer = setTimeout(() => { b.hidden = true; }, 3400);
   }
 
   // 席配置：相手は上側の弧に、自分は常に下中央に固定

@@ -14,9 +14,9 @@ const io = new Server(httpServer);
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true, rooms: roomCount() }));
 
-// 合い言葉ロック：環境変数 ACCESS_CODE が設定されている場合のみ有効。
-// 未設定（ローカル開発など）なら誰でも入れる。
-const ACCESS_CODE = (process.env.ACCESS_CODE || '').trim();
+// 合い言葉ロック（身内ゲート）。変更する時はこの値を書き換えるだけ。
+// ローカル開発/テストでは環境変数 NO_GATE=1 でゲートを無効化できる。
+const ACCESS_CODE = process.env.NO_GATE === '1' ? '' : 'オオギリ';
 function gateOk(socket) {
   return !ACCESS_CODE || socket.data.authed === true;
 }
