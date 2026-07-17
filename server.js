@@ -16,7 +16,7 @@ app.get('/health', (_req, res) => res.json({ ok: true, rooms: roomCount() }));
 
 // 合い言葉ロック（身内ゲート）。変更する時はこの値を書き換えるだけ。
 // ローカル開発/テストでは環境変数 NO_GATE=1 でゲートを無効化できる。
-const ACCESS_CODE = process.env.NO_GATE === '1' ? '' : 'オオギリ';
+const ACCESS_CODE = process.env.NO_GATE === '1' ? '' : 'oogiri';
 function gateOk(socket) {
   return !ACCESS_CODE || socket.data.authed === true;
 }
@@ -46,7 +46,7 @@ io.on('connection', (socket) => {
   // 合い言葉の照合
   socket.on('auth:check', (code, cb) => {
     if (!ACCESS_CODE) { socket.data.authed = true; return cb?.({ ok: true, required: false }); }
-    if (String(code || '').trim() === ACCESS_CODE) {
+    if (String(code || '').trim().toLowerCase() === ACCESS_CODE.toLowerCase()) {
       socket.data.authed = true;
       cb?.({ ok: true, required: true });
     } else {
