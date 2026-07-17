@@ -250,6 +250,13 @@ input:focus-visible { outline: none; border-color: var(--gold); box-shadow: 0 0 
 .fr-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .fr-name { flex: 1; text-align: left; font-weight: 600; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fr-chips { color: var(--gold); font-weight: 700; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.fr-ko { font-size: .72rem; color: #f0a0a0; font-weight: 700; }
+.fr-money { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-variant-numeric: tabular-nums; }
+.fr-gain { font-size: .78rem; font-weight: 800; color: #7ed09a; }
+.fr-bank { font-size: .74rem; font-weight: 700; color: var(--gold); }
+.fr-note { font-size: .68rem; color: var(--muted); margin-top: 8px; width: min(330px, 80vw); text-align: center; line-height: 1.4; }
+.lc-econ { font-size: .82rem; color: var(--gold); font-weight: 700; background: rgba(232,199,102,.1); border: 1px solid rgba(232,199,102,.25); border-radius: 999px; padding: 4px 14px; }
+.seat-bank { font-size: .64rem; color: var(--gold); opacity: .75; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: -1px; }
 
 /* --- カード --- */
 .card {

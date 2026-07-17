@@ -162,11 +162,11 @@ console.log('=== モード分離（クイックマッチは記録を残さない
   ok(Object.keys(q.playerStats).length === 0, 'quick: 配札してもplayerStats空');
   const a1 = q.game.seats[q.game.toAct].id; q.applyAction(a1, 'raise', 40);
   ok(Object.keys(q.playerStats).length === 0, 'quick: アクションしてもVPIP計上なし');
-  // KO＆決着させても通算・対戦表は空
-  q.game = { seats: [{ id: 'a', startChips: 1000 }, { id: 'b', startChips: 1000 }, { id: 'c', startChips: 1000 }], result: { pots: [{ amount: 3000, winners: ['a'], eligible: ['a', 'b', 'c'] }] } };
-  q.getPlayer('c').chips = 0; q.getPlayer('b').chips = 0; q.getPlayer('a').chips = 3000;
-  q._processEliminations();
-  ok(q.state === 'finished', 'quick: 決着はする');
+  // クイックはトーナメントではない＝脱落処理もフィールド確定もしない
+  ok(q.isTournament === false, 'quick: isTournament=false');
+  ok(q.tourneyFieldIds === null, 'quick: フィールド未確定（脱落なし）');
+  q._processEliminations(); // 直接呼んでも field=null で安全に何もしない
+  ok(q.state !== 'finished', 'quick: 決着しない');
   ok(Object.keys(q.seasonStats).length === 0, 'quick: 通算成績は空');
   ok(Object.keys(q.koMatrix).length === 0, 'quick: 対戦表も空');
   // シーズン：同じ流れで記録が残る
@@ -175,6 +175,55 @@ console.log('=== モード分離（クイックマッチは記録を残さない
   s.startHand();
   ok(s.recordsOn === true, 'season: recordsOn=true');
   ok(s.playerStats['a'].hands === 1, 'season: playerStatsが貯まる');
+}
+
+console.log('=== バンクロール2階建て（バイイン・賞金・バウンティ・補填）===');
+{
+  const room = new Room('BR', { levelSeconds: 60, startingChips: 1000, mode: 'season' });
+  ['a', 'b', 'c'].forEach((id) => room.addPlayer(id, id));
+  ok(room.getPlayer('a').bankroll === 10000, '初期バンクロール=10バイイン(10000)');
+  ok(room.buyIn() === 1000 && room.bankrollStart() === 10000, 'buyIn=1000 / start=10000');
+  const before = ['a', 'b', 'c'].reduce((s, id) => s + room.getPlayer(id).bankroll, 0);
+  room.startHand();
+  ok(room.getPlayer('a').bankroll === 9000, 'バイイン徴収後=9000');
+  ok(room.tourneyBuyInTotal === 3000, 'バイインプール=3000');
+  // c→b の順で脱落、a 優勝（bを飛ばしたのは a、cを飛ばしたのも a とする）
+  room.game = { seats: [{ id: 'a', startChips: 1000 }, { id: 'b', startChips: 1000 }, { id: 'c', startChips: 500 }], result: { pots: [{ amount: 1500, winners: ['a'], eligible: ['a', 'c'] }] } };
+  room.getPlayer('c').chips = 0; room.getPlayer('a').chips = 1500; room.getPlayer('b').chips = 1000;
+  room._processEliminations(); // c脱落、aにバウンティ200
+  ok(room.koCounts['a'] === 1, 'a KO=1');
+  ok(room.tourneyBountyPaid === 200, 'バウンティ支払い=200');
+  ok(room.getPlayer('a').bankroll === 9200, 'aの口座にバウンティ200が即時加算(9200)');
+  // b も脱落 → a 優勝で決着
+  room.game = { seats: [{ id: 'a', startChips: 1500 }, { id: 'b', startChips: 1000 }], result: { pots: [{ amount: 2000, winners: ['a'], eligible: ['a', 'b'] }] } };
+  room.getPlayer('b').chips = 0; room.getPlayer('a').chips = 2500;
+  room._processEliminations();
+  ok(room.state === 'finished', '決着');
+  ok(room.koCounts['a'] === 2 && room.tourneyBountyPaid === 400, 'aが2KO＝バウンティ計400');
+  // 賞金原資 = バイイン3000 − 支払いバウンティ400 = 2600。3人は[65,35]で上位2名へ
+  const pool = room.tourneyBuyInTotal - room.tourneyBountyPaid;
+  const prizeA = Math.round(pool * 0.65), prizeB = Math.round(pool * 0.35);
+  const remainder = pool - prizeA - prizeB;
+  ok(room.tourneyPrizes['a'] === prizeA + remainder, `1位賞金=${prizeA + remainder}`);
+  ok(room.tourneyPrizes['b'] === prizeB, `2位賞金=${prizeB}`);
+  ok(!room.tourneyPrizes['c'], '3位は賞金なし');
+  // バンクロール保存則：全員の口座合計は不変（実マネー流入なし＝ゼロサム）
+  const after = ['a', 'b', 'c'].reduce((s, id) => s + room.getPlayer(id).bankroll, 0);
+  ok(after === before, `口座合計が保存(${after}=${before})`);
+  // finalRanking に賞金・口座が載る
+  const fa = room.finalRanking.find((x) => x.id === 'a');
+  ok(fa.prize === prizeA + remainder && fa.bankroll === room.getPlayer('a').bankroll, 'finalRankingに賞金/口座');
+}
+
+console.log('=== 破産時の自動補填（無制限）===');
+{
+  const room = new Room('RF', { levelSeconds: 0, startingChips: 1000, mode: 'season' });
+  ['a', 'b'].forEach((id) => room.addPlayer(id, id));
+  room.getPlayer('a').bankroll = 500; // バイイン(1000)未満に設定
+  room.startHand();
+  // 補填3000されてからバイイン1000 → 500+3000-1000=2500
+  ok(room.getPlayer('a').bankroll === 2500, '補填3000後にバイイン(2500)');
+  ok(room.getPlayer('a').refills === 1, '補填回数=1');
 }
 
 console.log(`\n結果: ${pass} pass / ${fail} fail`);

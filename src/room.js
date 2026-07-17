@@ -24,6 +24,11 @@ export class Room {
     this.bounties = {};          // playerId -> 獲得バウンティ累計
     this.koCounts = {};          // playerId -> KO数
     this.lastKOs = [];           // 直近ハンドのKO（演出用）
+    // バンクロール（2階建てチップ：口座）。トーナメント1回ごとにバイインを払い、
+    // 賞金・バウンティで増える。すべてアプリ内チップ（実マネーではない）。
+    this.tourneyBuyInTotal = 0;  // 今トーナメントで集めたバイイン合計（=賞金原資）
+    this.tourneyBountyPaid = 0;  // 今トーナメントで支払ったバウンティ合計
+    this.tourneyPrizes = {};     // playerId -> 今トーナメントの獲得賞金（決着時）
     // 通算成績（部屋内のトーナメントを跨いで累積）
     this.seasonStats = {};       // playerId -> { points, kos, wins, played, name, char }
     this.koMatrix = {};          // koerId -> { bustedId: 撃破回数 }（天敵/カモ用・シーズン跨ぎで累積）
@@ -97,6 +102,8 @@ export class Room {
       name: name || 'プレイヤー',
       char: char || 'haru',
       chips: this.config.startingChips,
+      bankroll: this.bankrollStart(), // 口座（持ち金）。シーズンを通じて増減
+      refills: 0,                     // 破産して自動補填を受けた回数
       connected: true,
       socketId: null,
       sittingOut: this.state !== 'lobby', // 対局中の途中参加は次ハンドから
@@ -144,8 +151,8 @@ export class Room {
       const v = Math.floor(config.startingChips);
       if (v < 100 || v > 1000000) return { ok: false, error: '初期チップは100〜1,000,000で指定してください' };
       this.config.startingChips = v;
-      // ロビー中なら全員のチップを新しい初期値に合わせる
-      for (const p of this.players) { p.chips = v; this.statsBaseline[p.id] = v; }
+      // ロビー中なら全員のチップ・口座を新しい初期値に合わせる
+      for (const p of this.players) { p.chips = v; this.statsBaseline[p.id] = v; p.bankroll = this.bankrollStart(); p.refills = 0; }
       this.history = [{ hand: 0, stacks: Object.fromEntries(this.players.map((p) => [p.id, v])) }];
     }
     if (config.mode !== undefined && this.handNumber === 0) {
@@ -209,7 +216,7 @@ export class Room {
     if (this.state === 'finished') {
       return { ok: false, error: 'このトーナメントは終了しました。新しいトーナメントを始めてください' };
     }
-    const isTour = this.config.levelSeconds > 0;
+    const isTour = this.isTournament; // シーズン戦＝トーナメント（脱落・決着・バンクロールあり）
     // 途中参加者の着席を解除（今ハンドから参加可能に）
     for (const p of this.players) {
       if (p.connected && p.chips > 0) p.sittingOut = false;
@@ -238,11 +245,12 @@ export class Room {
     const dealerIndex = (n === 2) ? (bbIdx + 1) % 2 : (bbIdx - 2 + n) % n;
     const dealerId = orderedIds[dealerIndex];
 
-    // トーナメント時は最初のハンドでブラインド時計を起動＆フィールド確定
-    if (isTour && this.levelEndsAt === 0) {
-      this.levelEndsAt = Date.now() + this.config.levelSeconds * 1000;
+    // トーナメント開始（最初のハンド）：フィールド確定＋バイイン徴収＋（時計があれば）起動
+    if (isTour && !this.tourneyFieldIds) {
       this.tourneyFieldIds = participants.map((p) => p.id);
       this.tourneyPlaces = {};
+      this._chargeBuyIns(participants); // 破産者は自動補填してからバイインを払う
+      if (this.config.levelSeconds > 0) this.levelEndsAt = Date.now() + this.config.levelSeconds * 1000;
     }
     const blinds = this.currentBlinds();
     this.game = new Game(
@@ -315,10 +323,64 @@ export class Room {
     this.history.push({ hand: this.handNumber, stacks });
     if (this.history.length > 500) this.history.shift();
     // トーナメント：脱落判定・決着判定
-    if (this.config.levelSeconds > 0 && this.tourneyFieldIds) this._processEliminations();
+    if (this.isTournament && this.tourneyFieldIds) this._processEliminations();
   }
 
   bountyValue() { return Math.round(this.config.startingChips * 0.2); }
+
+  // ===== バンクロール（2階建てチップ）=====
+  // シーズン戦は「トーナメント」＝バイインを払って参加し、賞金・バウンティで口座が増減する。
+  get isTournament() { return this.config.mode === 'season'; }
+  buyIn() { return this.config.startingChips; }            // 参加費＝トーナメント開始スタックと同額
+  bankrollStart() { return this.config.startingChips * 10; } // 初期の持ち金＝10バイイン分
+  refillAmount() { return this.config.startingChips * 3; }   // 破産時の自動補填＝3バイイン分（無制限）
+
+  // 賞金分配率（%）。人数別。上位に厚く、小規模でも2〜3人に行き渡る配分。
+  _prizeSplit(N) {
+    const T = {
+      2: [100], 3: [65, 35], 4: [55, 30, 15], 5: [50, 30, 20],
+      6: [45, 27, 18, 10], 7: [42, 25, 16, 10, 7],
+      8: [40, 24, 15, 10, 7, 4], 9: [38, 23, 14, 10, 7, 5, 3],
+    };
+    return T[N] || T[9];
+  }
+
+  // トーナメント開始時：破産者を自動補填し、全員からバイインを徴収する
+  _chargeBuyIns(participants) {
+    this.tourneyBuyInTotal = 0;
+    this.tourneyBountyPaid = 0;
+    this.tourneyPrizes = {};
+    const bi = this.buyIn();
+    for (const p of participants) {
+      if (p.bankroll < bi) { p.bankroll += this.refillAmount(); p.refills = (p.refills || 0) + 1; }
+      p.bankroll -= bi;
+      this.tourneyBuyInTotal += bi;
+    }
+  }
+
+  // 決着時：賞金原資（集めたバイイン − 支払ったバウンティ）を上位へ分配し口座へ加算
+  _awardPrizes() {
+    const pool = Math.max(0, this.tourneyBuyInTotal - this.tourneyBountyPaid);
+    const N = this.tourneyFieldIds.length;
+    const split = this._prizeSplit(N);
+    const idByPlace = {};
+    for (const id of this.tourneyFieldIds) idByPlace[this.tourneyPlaces[id]] = id;
+    let distributed = 0;
+    for (let i = 0; i < split.length; i++) {
+      const id = idByPlace[i + 1];
+      if (!id) continue;
+      const amt = Math.round((pool * split[i]) / 100);
+      this.tourneyPrizes[id] = (this.tourneyPrizes[id] || 0) + amt;
+      distributed += amt;
+    }
+    // 端数は1位へ
+    const firstId = idByPlace[1];
+    if (firstId) this.tourneyPrizes[firstId] = (this.tourneyPrizes[firstId] || 0) + (pool - distributed);
+    for (const [id, amt] of Object.entries(this.tourneyPrizes)) {
+      const p = this.getPlayer(id);
+      if (p) p.bankroll += amt;
+    }
+  }
 
   // 指定プレイヤーを飛ばした（＝そのチップを取った）人を特定
   _findKOer(bustedId) {
@@ -336,6 +398,7 @@ export class Room {
   _processEliminations() {
     this.lastKOs = [];
     const field = this.tourneyFieldIds;
+    if (!field) return; // トーナメント外（クイックマッチ等）では脱落処理をしない
     const fieldSize = field.length;
     // このハンド開始時のスタック（同時脱落の順位付けに使用）
     const seatStart = {};
@@ -357,6 +420,9 @@ export class Room {
         this.bounties[koerId] = (this.bounties[koerId] || 0) + amt;
         this.koCounts[koerId] = (this.koCounts[koerId] || 0) + 1;
         const koer = this.getPlayer(koerId);
+        // バウンティは即時に口座（バンクロール）へ。原資はバイインプールから支払う
+        if (koer) koer.bankroll += amt;
+        this.tourneyBountyPaid += amt;
         this.lastKOs.push({ koerId, koerName: koer ? koer.name : '?', bustedName: p.name, amount: amt });
         // 対戦表：koer が p を飛ばした回数を累積（天敵/カモ・記録ありモードのみ）
         if (this.recordsOn) {
@@ -375,10 +441,17 @@ export class Room {
 
   _finishTournament() {
     this.state = 'finished';
+    this._awardPrizes(); // 賞金を口座へ分配（この後の finalRanking に反映）
     this.finalRanking = this.tourneyFieldIds
       .map((id) => {
         const p = this.getPlayer(id);
-        return { id, name: p ? p.name : '?', char: p ? p.char : 'haru', chips: p ? p.chips : 0, place: this.tourneyPlaces[id] || 99, bounty: this.bounties[id] || 0, kos: this.koCounts[id] || 0 };
+        return {
+          id, name: p ? p.name : '?', char: p ? p.char : 'haru',
+          chips: p ? p.chips : 0, place: this.tourneyPlaces[id] || 99,
+          bounty: this.bounties[id] || 0, kos: this.koCounts[id] || 0,
+          prize: this.tourneyPrizes[id] || 0,          // 今トーナメントの獲得賞金
+          bankroll: p ? p.bankroll : 0,                // 決着後の持ち金
+        };
       })
       .sort((a, b) => a.place - b.place);
     if (this.recordsOn) this._awardSeason(); // クイックマッチでは通算に加算しない
@@ -430,7 +503,10 @@ export class Room {
 
   seasonStandings() {
     return Object.entries(this.seasonStats)
-      .map(([id, s]) => ({ id, name: s.name || '?', char: s.char || 'haru', points: s.points, kos: s.kos, wins: s.wins, played: s.played, bounty: s.bounty || 0 }))
+      .map(([id, s]) => {
+        const p = this.getPlayer(id);
+        return { id, name: s.name || '?', char: s.char || 'haru', points: s.points, kos: s.kos, wins: s.wins, played: s.played, bounty: s.bounty || 0, bankroll: p ? p.bankroll : 0 };
+      })
       .sort((a, b) => b.points - a.points || b.wins - a.wins || b.kos - a.kos);
   }
 
@@ -440,6 +516,8 @@ export class Room {
     this.level = 0; this.levelEndsAt = 0;
     this.tourneyFieldIds = null; this.tourneyPlaces = {}; this.finalRanking = null;
     this.bounties = {}; this.koCounts = {}; this.lastKOs = [];
+    // バンクロール（口座）はトーナメントを跨いで持ち越す。集計トラッカーのみリセット
+    this.tourneyBuyInTotal = 0; this.tourneyBountyPaid = 0; this.tourneyPrizes = {};
     this.game = null; this.dealerPlayerId = null; this.bbPlayerId = null; this.handNumber = 0;
     this.state = 'lobby';
     for (const p of this.players) this.statsBaseline[p.id] = p.chips;
@@ -482,6 +560,8 @@ export class Room {
         name: p.name,
         char: p.char || 'haru',
         chips: p.chips,
+        bankroll: p.bankroll ?? 0,
+        refills: p.refills || 0,
         connected: p.connected,
         sittingOut: p.sittingOut,
         isHost: p.id === this.hostId,
@@ -500,9 +580,14 @@ export class Room {
       finalRanking: this.finalRanking,
       places: this.tourneyPlaces,
       // バウンティ
-      bountyValue: this.config.levelSeconds > 0 ? this.bountyValue() : 0,
+      bountyValue: this.isTournament ? this.bountyValue() : 0,
       koCounts: this.koCounts,
       lastKOs: this.lastKOs,
+      // バンクロール（2階建てチップ）
+      isTournament: this.isTournament,
+      buyIn: this.isTournament ? this.buyIn() : 0,
+      bankrollStart: this.bankrollStart(),
+      prizePool: Math.max(0, this.tourneyBuyInTotal - this.tourneyBountyPaid),
       // 通算成績
       seasonStandings: this.seasonStandings(),
       koMatrix: this.koMatrix,

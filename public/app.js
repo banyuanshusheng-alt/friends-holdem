@@ -507,7 +507,16 @@
 
       // チップと状態タグ
       const info = el('div', 'seat-info');
-      info.appendChild(el('div', 'seat-chips', fmt(p.chips)));
+      const inLobby = state.state === 'lobby' || state.state === 'finished';
+      const season = state.config && state.config.mode === 'season';
+      if (inLobby && season) {
+        // 卓外（集合中・決着後）は持ち金（口座）を主表示
+        info.appendChild(el('div', 'seat-chips', `🏦${fmt(p.bankroll || 0)}`));
+      } else {
+        info.appendChild(el('div', 'seat-chips', fmt(p.chips)));
+        // 対局中も口座を小さく併記（シーズン戦のみ）
+        if (season) info.appendChild(el('div', 'seat-bank', `🏦${fmt(p.bankroll || 0)}`));
+      }
       const resultPlayer = state.game && state.game.result
         ? state.game.result.players.find((rp) => rp.id === p.id) : null;
       const animating = !!runoutState; // 演出中は勝敗を伏せる
@@ -600,6 +609,7 @@
         <span class="lc-code-copy">⧉ タップで招待メッセージをコピー</span>
       </button>
       <div class="lc-count">👥 ${count}人が集合${need > 0 ? `　<span class="lc-need">あと${need}人でスタート可</span>` : ''}</div>
+      ${!quick ? `<div class="lc-econ">🏦 持ち金 ${fmt(state.bankrollStart || 0)}　｜　🎫 バイイン ${fmt(state.buyIn || (state.config && state.config.startingChips) || 0)}／回</div>` : ''}
       <div class="lc-hint">${isHost ? '2人以上そろったら下の「ゲーム開始」を押そう' : 'ホストの開始を待っています…'}</div>
     `;
     const btn = lc.querySelector('#lc-code');
@@ -615,14 +625,21 @@
       <div class="fr-crown">🏆</div>
       <div class="fr-title">${champ ? esc(champ.name) + ' 優勝！' : 'トーナメント終了'}</div>
       <div class="fr-list">
-        ${r.map((x) => `
+        ${r.map((x) => {
+          const gain = (x.prize || 0) + (x.bounty || 0); // このトーナメントの獲得（賞金＋バウンティ）
+          return `
           <div class="fr-row${x.place === 1 ? ' champ' : ''}">
             <span class="fr-place">${medal(x.place)}</span>
             <span class="fr-av" style="border-color:${charById(x.char).color}"><img src="${charImg(x.char)}" alt=""></span>
-            <span class="fr-name">${esc(x.name)}${x.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : ''}</span>
-            <span class="fr-chips">${x.kos > 0 ? `🎯${x.kos}` : ''}${x.bounty > 0 ? ` +${fmt(x.bounty)}` : (x.kos > 0 ? '' : '—')}</span>
-          </div>`).join('')}
-      </div>`;
+            <span class="fr-name">${esc(x.name)}${x.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : ''}${x.kos > 0 ? ` <span class="fr-ko">🎯${x.kos}</span>` : ''}</span>
+            <span class="fr-money">
+              <span class="fr-gain">${gain > 0 ? '💰+' + fmt(gain) : '—'}</span>
+              <span class="fr-bank">🏦${fmt(x.bankroll || 0)}</span>
+            </span>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="fr-note">💰=このトーナメントの獲得（賞金＋バウンティ）／🏦=持ち金（口座）</div>`;
   }
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
@@ -900,7 +917,7 @@
 
   const SEASON_BOARDS = {
     points: { icon: '👑', label: '王者', key: 'points', unit: 'pt', fmtVal: (v) => fmt(v) },
-    bounty: { icon: '💰', label: '賞金王', key: 'bounty', unit: '', fmtVal: (v) => fmt(v) },
+    bounty: { icon: '💰', label: '賞金王', key: 'bankroll', unit: '', fmtVal: (v) => fmt(v) },
     kos: { icon: '🎯', label: 'ハンター', key: 'kos', unit: 'KO', fmtVal: (v) => String(v) },
   };
 
@@ -947,7 +964,7 @@
         row.appendChild(av);
         const info = el('div', 'ss-info');
         info.appendChild(el('div', 'ss-name', esc(p.name) + (p.id === state.youId ? ' <span class="you-badge">(あなた)</span>' : '')));
-        info.appendChild(el('div', 'ss-sub', `👑${fmt(p.points)}pt ・ 💰${fmt(p.bounty || 0)} ・ 🎯${p.kos} ・ 🏆${p.wins}回 ・ ${p.played}戦`));
+        info.appendChild(el('div', 'ss-sub', `🏦${fmt(p.bankroll || 0)} ・ 👑${fmt(p.points)}pt ・ 🎯${p.kos} ・ 🏆${p.wins}回 ・ ${p.played}戦`));
         row.appendChild(info);
         const val = board.fmtVal(p[board.key] || 0);
         row.appendChild(el('div', 'ss-pts', val + (board.unit ? `<span>${board.unit}</span>` : '')));
